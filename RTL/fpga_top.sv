@@ -18,7 +18,9 @@ module fpga_top(
     output wire        uart_tx,         // connect to USB-to-UART chip's UART-RX
     
     // connect to on-board LED's (optional)
-    output wire        led0, led1, led2
+    output wire        led0,            // led0=1 indicates PLL is normally run
+    output wire        led1,            // led1=1 indicates carrier is on
+    output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
 );
 
 //-------------------------------------------------------------------------------------------------------------------------------------

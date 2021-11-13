@@ -6,7 +6,7 @@ FPGA NFC (RFID)
 
 ## 为什么要做本项目？
 
-本人想玩玩射频，又想展示一些和其它玩 SDR 的人不一样的东西。然后发现 NFC 的载波频率只有 13.56MHz，且调制方式为调幅（ASK） ，可以用很低的成本（最廉价的 FPGA + 1个3Msps 的ADC + 几个分立器件）实现一个读卡器。FPGA内既进行数字信号处理，又进行协议处理，是一个完整的~~可以装X的~~小系统。于是就有了本项目，目前已经能在 PC 端串口命令控制下，完整地支持 ISO14443A 。并成功地与 M1卡 交互。
+本人想玩玩射频，又想展示一些和其它玩 SDR 的人不一样的东西。然后发现 NFC 的载波频率只有 13.56MHz，且调制方式为调幅（ASK） ，可以用很低的成本（最廉价的 FPGA + 1个3Msps 的ADC + 几个分立器件）实现一个读卡器。FPGA内既进行数字信号处理，又进行协议处理，是一个完整的~~可以装X的~~小系统。于是就有了本项目，它能在 PC 端串口命令控制下，完整地支持 ISO14443A 。并成功地与 M1卡 交互。
 
 
 
@@ -32,45 +32,50 @@ FPGA NFC (RFID)
 
 ## 项目思路
 
-对于发送，13.56MHz 载波发送可以让 FPGA 驱动一个 MOS 管 (FDV301N) + 一个谐振电路来让天线(线圈)谐振。对于 ISO14443A，PCD-to-PICC 的调制方式是 100% ASK （即在一个副载波周期内，要么满幅度发送载波，要么完全不发送载波），这对 FPGA 也是很容易实现的。
+对于 PCD-to-PICC ，用 FPGA 的引脚产生 13.56MHz 的信号，该信号驱动一个 MOS 管 (FDV301N) + 一个谐振电路来让天线(线圈)谐振。对于 ISO14443A，PCD-to-PICC 的调制方式是 100% ASK （即在一个副载波周期内，要么满幅度发送载波，要么完全不发送载波），这对 FPGA 也是很容易实现的。
 
-对于 ISO14443A 接收，PICC-to-PCD 的调制方式是 2%~10% 的 ASK （即在一个副载波周期内，要么让载波减弱一点，要么不减弱）。我用二极管(1N4148)+电容电阻来做包络检波，该包络线的频率=副载波频率=847.5kHz。这样避免我们用几十Msps的ADC来直接采样载波，而是只用一个 3Msps 的 ADC (AD7276B) 来采样副载波即可。
+PICC-to-PCD 的调制方式是 2%~10% 的 ASK （即在一个副载波周期内，要么让载波衰减一点，要么不衰减）。我用二极管(1N4148)+电容+电阻来做包络检波，得到包络线的频率=副载波频率=847.5kHz。这降低了 ADC 采样率的需求，避免直接使用 ≥20Msps 的 ADC 来采样载波，而是只用一个 3Msps 的 ADC (AD7276B) 来采样副载波即可。在 FPGA 内，用一个数字信号处理(DSP)算法来检测 ASK 信号，即 ADC 信号的幅度的微小变化，需要有抗噪声能力，并自适应信号幅度，我用的是中值滤波减去原始信号，再做比例阈值判断，效果不错。
 
-在 FPGA 内，需要用一个数字信号处理算法来检测 ADC 信号的幅度的微小变化，需要一定的抗噪声能力（我用的是中值滤波减去原始信号，再做阈值检测，效果不错）。
-
-至于发送协议的 CRC 校验生成、封包；接收协议的解包 [2]，这是 FPGA 的强项，不必多说。
+至于发送协议的 CRC 校验生成和封包、接收协议的解包 [2]，这是 FPGA 的强项，不必多说。
 
 我还在 FPGA 中实现了串口控制逻辑，用户可以在 PC 端的”串口调试工具“中发送你要发送给卡片的数据，然后收到卡片返回的数据。
 
 下图是系统框图，其中 FPGA 中的模块下方逐个标注了 Verilog 代码文件名。
 
-    ____________    __________________________________________________________________________________________________
-    |          |    |                      _________________________________________________________                 |
-    |          |    |         ___________  |    ____________          _____________                |                 |   ____________    ____________
-    |          |    |         | UART RX |  |    |  frame   |          | RFID TX   |                |                 |   | FDV301N  |    | Resonant |     ___________
-    |  uart_tx |--->| uart_rx |  logic  |--|--->|  pack    |--------->| modulate  |--------------->|---------------->|-->| N-MOSFET |--->| circuit  |     |         |
-    |          |    |         -----------  |    ------------          -------------                |   carrier_out   |   |          |    |          |---->| Antenna |
-    |          |    |  uart_rx.sv          | nfca_tx_frame.sv           | nfca_tx_modulate.sv      |                 |   ------------    ------------  |  |  Coil   |
-    |          |    |  uart_rx_parser.sv   |                    rx_rstn |                          |                 |                                 |  |         |
-    |      GND |----|  stream_sync_fifo.sv |                            |                          |                 |                                 |  -----------
-    |          |    |         ___________  |  ___________         ______V____        ____________  |  _____________  |     ___________   ____________  |
-    |          |    |         | UART TX |  |  | bytes   |         | bits    |        | ADC data |  |  | AD7276B   |  |     |         |   | envelop  |  |
-    |  uart_rx |<---| uart_tx |  logic  |<-|--| rebuild |<--------| rebuild |<-------| process  |<-|--| ADC reader|<-|<----| AD7276B |<--|detection |<--
-    |          |    |         -----------  |  -----------         -----------        ------------  |  -------------  | SPI |   ADC   |   |          |
-    |          |    |        uart_tx.sv    |nfca_rx_tobytes.sv   nfca_rx_tobits.sv  nfca_rx_dsp.sv |  ad7276_read.sv |     -----------   ------------
-    |          |    |                      --------------------------------------------------------|                 |
-    |          |    |                                      nfca_controller.sv                                        |
-    ------------    --------------------------------------------------------------------------------------------------
-       Host PC                          FPGA (fpga_top.sv)                                                                       Analog Circuit
-       
+    _________   _________________________________________________________________________________________________________
+            |   |  ___________________________________________________________________________________________________  |
+            |   |  |                       _________________________________________________________                 |  |
+            |   |  |         ___________   |    ____________          _____________                |                 |  |   ____________    ____________
+            |   |  | uart_rx | UART RX |   |    |  frame   |          | RFID TX   |                |                 |  |   | FDV301N  |    | Resonant |      ___________
+    uart_tx |---|->|-------->|  logic  |---|--->|  pack    |--------->| modulate  |--------------->|---------------->|--|-->| N-MOSFET |--->| circuit  |      |         |
+            |   |  |         -----------   |    ------------          -------------                |   carrier_out   |  |   |          |    |          |---v->| Antenna |
+            |   |  |           uart_rx.sv  | nfca_tx_frame.sv           | nfca_tx_modulate.sv      |                 |  |   ------------    ------------   |  |  Coil   |
+            |   |  |    uart_rx_parser.sv  |                    rx_rstn |                          |                 |  |                                  |  |         |
+            |   |  |  stream_sync_fifo.sv  |                            |                          |                 |  |                                  |  -----------
+            |   |  |         ___________   |  ___________         ______V____        ____________  |  _____________  |  |     ___________   ____________   |
+            |   |  | uart_tx | UART TX |   |  | bytes   |         | bits    |        | ADC data |  |  | AD7276B   |  |  |     | AD7276B |   | Envelop  |   |
+    uart_rx |<--|--|<--------|  logic  |<--|--| rebuild |<--------| rebuild |<-------| DSP      |<-|--|ADC reader |<-|<-|-----|   ADC   |<--| detection|<---
+            |   |  |         -----------   |  -----------         -----------        ------------  |  -------------  |  | SPI |         |   |          |
+            |   |  |          uart_tx.sv   |nfca_rx_tobytes.sv   nfca_rx_tobits.sv  nfca_rx_dsp.sv |  ad7276_read.sv |  |     -----------   ------------
+        GND |---|  |                       --------------------------------------------------------|                 |  |
+            |   |  |                                      nfca_controller.sv                                         |  |
+            |   |  ---------------------------------------------------------------------------------------------------  |
+            |   |                                    uart2nfca_system_top.sv                                            |
+    ---------    --------------------------------------------------------------------------------------------------------
+     Host-PC                                               FPGA (fpga_top.sv)                                                       Analog Circuit
+
 
 
 
 # 硬件
 
-需要一个很简单的 PCB，上面包括发送电路的 N-MOSFET、电感等。接收电路的 1N4148 二极管、以及 AD7276B ADC。
+需要一个很简单的 NFC 读卡器模块，上面主要包括：
 
-我在立创 EDA 开源，详见 https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard 。你可以拿他来打样。
+- 发送电路的 N-MOSFET、电感等。
+- 接收电路的 1N4148 二极管、AD7276B 等。
+- 一个4匝的线圈。
+
+它的 PCB 设计在立创 EDA 开源，详见 https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard 。你可以拿他来打样。
 
 如果你只看原理图 ，见 NFC_RFID_BreakoutBoard_sch.pdf 。一些原理和焊接的注意事项我已经写在原理图中。
 
@@ -80,6 +85,8 @@ FPGA NFC (RFID)
 
 # FPGA 部署
 
+首先将上述 NFC 读卡器模块连接到 FPGA 开发板（需要4个普通 IO 引脚，电平为 3.3V 或 2.5V 。因为频率为几十MHz，建议不要用杜邦线，而是用排针直插）
+
 部署到 FPGA 时，所有 ./RTL/ 目录 和 ./RTL/nfca_controller/ 目录 中的 .sv 文件都需要加入工程。FPGA 顶层为 fpga_top.sv 。它的每个引脚的连接方式见代码注释，如下：
 
     module fpga_top(
@@ -87,23 +94,25 @@ FPGA NFC (RFID)
         input  wire        clk50m,          // a 50MHz Crystal oscillator
         
         // AD7276 ADC SPI interface
-        output wire        ad7276_csn,      // connect to AD7276's CSN   (RFID_NFC_Breakboard 的 ADC_CSN)
-        output wire        ad7276_sclk,     // connect to AD7276's SCLK  (RFID_NFC_Breakboard 的 ADC_SCK)
-        input  wire        ad7276_sdata,    // connect to AD7276's SDATA (RFID_NFC_Breakboard 的 ADC_DAT)
+        output wire        ad7276_csn,      // connect to AD7276's CSN   (读卡器模块 的 ADC_CSN)
+        output wire        ad7276_sclk,     // connect to AD7276's SCLK  (读卡器模块 的 ADC_SCK)
+        input  wire        ad7276_sdata,    // connect to AD7276's SDATA (读卡器模块 的 ADC_DAT)
         
         // NFC carrier generation signal
-        output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate （栅极）  (RFID_NFC_Breakboard 的 CARRIER_OUT)
+        output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate （栅极）  (读卡器模块 的 CARRIER_OUT)
         
-        // connect to Host-PC (typically via a USB-to-UART chip on FPGA board, such as CP2102 or CH340)
+        // connect to Host-PC (typically via a USB-to-UART chip on FPGA board, such as FT232, CP2102 or CH340)
         input  wire        uart_rx,         // connect to USB-to-UART chip's UART-TX
         output wire        uart_tx,         // connect to USB-to-UART chip's UART-RX
         
         // connect to on-board LED's (optional)
-        output wire        led0, led1, led2
+        output wire        led0,            // led0=1 indicates PLL is normally run
+        output wire        led1,            // led1=1 indicates carrier is on
+        output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
     );
 
 * 所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。
-* 除了 fpga_top.sv 里的 altpll module 是仅限于 Cyclone IV E 的原语，它用来生成 81.36MHz 时钟，用来驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV E，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换。
+* 除了 fpga_top.sv 里的 altpll 模块是仅限于 Cyclone IV E 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV E，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换。
 
 
 
@@ -117,16 +126,16 @@ FPGA NFC (RFID)
 
 ## 与 M1 卡通信
 
-我用自己的门禁卡，和几个在 taobao 上买了的 M1 白卡试了试，因为都是 M1 卡，行为类似。以一个卡举例：
+我用自己的门禁卡，和几个在 taobao 上买了的 M1 “白卡”试了试，因为都是 M1 卡，行为类似。以一个卡举例：
 
-在 “串口调试助手” 中输入（注意末尾要加回车，这样才会被当成一条完整的命令）：
+在 “串口调试助手” 中输入如下命令并点击发送，这会发送 0x26（ISO14443 规定的 REQA [2]）给卡片（注意末尾要加回车，这样才会被当成一条完整的命令）：
 
     26
-    
-命令 FPGA 发送 0x26 (ISO14443 规定的 REQA [2]) 给卡片。然后串口收到如下，这是 ISO14443 规定的 ATQA，含义是 Bit frame anticollision 。
+
+
+然后串口收到如下，这是 ISO14443 规定的 ATQA，含义是 Bit frame anticollision 。
 
     04 00
-    
 
 > 注：如果没检测到卡，串口会收到字符 n。表示： FPGA正常工作，但没检测到卡。
 
@@ -134,32 +143,27 @@ FPGA NFC (RFID)
 
     26
     93 20
-    
 
-卡片响应（第一行是响应 REQA 的 ATQA，第二行是 响应 anticollision 的 UID）：
+卡片响应如下（第一行是响应 REQA 的 ATQA，第二行是 响应 anticollision 的 UID）：
 
     04 00
     4B BE DE 79 52
-    
 
 然后我们在“发送框”里下一行附加一个 ISO14443 规定的 SELECT 命令，用刚刚获取到的 UID 选中该卡：
 
     26
     93 20
     93 70 4B BE DE 79 52
-    
 
-卡响应 ISO14443 规定的 SAK：
+卡响应 ISO14443 规定的 SAK=0x08（代表它是 M1 卡。后面的 0xB6 0xDD 则是 CRC 校验码）：
 
     04 00
     4B BE DE 79 52
     08 B6 DD
-    
-可以看出，这个卡的 SAK=0x08，代表它是 M1 卡。后面的 0xB6 0xDD 则是 CRC 校验码。
 
-> 发送时不需要用户附加 CRC 校验码， FPGA 会在协议规定的需要加校验码的地方自动计算并追加 CRC。
+> 注：发送时不需要用户附加 CRC 校验码， FPGA 会在协议规定的需要加校验码的地方自动计算并追加 CRC。
 >
-> 接收时，CRC吗不会被 FPGA 检查和删掉，会从串口展示出来。
+> 注：接收时，CRC吗不会被 FPGA 检查和删掉，会从串口展示出来。
 
 根据卡片返回的 SAK ，知道这是 M1 卡后，我们可以发送 M1 卡的 Key 认证命令的 Phase1 （第一阶段），从卡片获取随机数（注意，该命令不是 ISO14443 规定的，而是 M1 卡独有的，其它卡不会响应这个命令）。我们在“发送框”里下一行附加：
 
@@ -167,7 +171,6 @@ FPGA NFC (RFID)
     93 20
     93 70 4B BE DE 79 52
     60 07
-    
 
 卡片响应 4 字节随机数：
 
@@ -175,19 +178,10 @@ FPGA NFC (RFID)
     4B BE DE 79 52
     08 B6 DD
     EF 9B B6 5A
-    
 
-
+M1 卡的后续认证、读写步骤很复杂，不是本工程关注的范围。本工程仅关注 ISO14443A PCD 与 PICC 交互的底层实现。你可以用上层应用程序（C, Python, C# 编程）控制串口来进行 M1 卡的进一步操作。
 
 在 anticollision 这一步，本项目也支持发送不完整的字节（bit-oriented frame）来进行多卡片冲突检测。留待后续完善文档。
-
-
-
-> 关于 M1 卡的后续认证、读写步骤，不是本工程关注的范围。
->
-> 本工程仅关注 ISO14443A PCD 与 PICC 交互的底层实现。
->
-> 你可以用上层应用程序（C, Python, C# 编程），控制串口来进行 M1 卡的进一步操作。
 
 
 
