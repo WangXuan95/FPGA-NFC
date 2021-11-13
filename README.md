@@ -72,7 +72,7 @@ FPGA NFC (RFID)
 
 我在立创 EDA 开源，详见 https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard 。你可以拿他来打样。
 
-如果你只看原理图 ，见 NFC_RFID_BreakoutBorad_sch.pdf 。一些原理和焊接的注意事项我已经写在原理图中。
+如果你只看原理图 ，见 NFC_RFID_BreakoutBoard_sch.pdf 。一些原理和焊接的注意事项我已经写在原理图中。
 
 该电路方案参考自 THM3060 原理图 [3] 。
 
