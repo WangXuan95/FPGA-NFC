@@ -46,7 +46,7 @@ uart2nfca_system_top uart2nfca_system_i (
     .carrier_out   ( carrier_out       ),
     .uart_rx       ( uart_rx           ),
     .uart_tx       ( uart_tx           ),
-    .rf_rx_rstn    ( led2              )
+    .rx_rstn       ( led2              )
 );
 
 

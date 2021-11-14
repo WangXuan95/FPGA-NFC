@@ -12,11 +12,11 @@ module uart_rx_parser #(
     // parsed byte stream
     output reg        tvalid,
     output reg  [7:0] tdata,
-    output reg        tlast,
-    output reg  [2:0] tlastb      // indicate how many bits are valid in the last byte. 0:1bit, 1:2bits, 2:3bits, ..., 7:8bits.
+    output reg  [3:0] tdatab,
+    output reg        tlast
 );
 
-initial {tvalid, tdata, tlast, tlastb} = '0;
+initial {tvalid, tdata, tlast, tdatab} = '0;
 
 localparam [7:0] CHAR_0  = 8'h30,  // "0"
                  CHAR_9  = 8'h39,  // "9"
@@ -59,7 +59,7 @@ reg [7:0] savedata = '0;
 
 always @ (posedge clk) begin
     {tvalid, tdata, tlast} <= '0;
-    tlastb <= 3'd7;
+    tdatab <= 4'd8;
     if(~rstn) begin
         fsm <= INIT;
         savedata <= '0;
@@ -96,9 +96,9 @@ always @ (posedge clk) begin
             if(ishex) begin
                 {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
                 if     (hexvalue == 4'd0)
-                    tlastb <= 3'd0;
+                    tdatab <= 4'd1;
                 else if(hexvalue <= 4'd7)
-                    tlastb <= hexvalue[2:0] - 3'd1;
+                    tdatab <= hexvalue;
                 fsm <= INVALID;
             end else if(iscrlf) begin
                 {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};

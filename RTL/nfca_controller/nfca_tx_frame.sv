@@ -7,8 +7,8 @@ module nfca_tx_frame (
     input  wire       tx_tvalid,
     output reg        tx_tready,
     input  wire [7:0] tx_tdata,
+    input  wire [3:0] tx_tdatab,      // indicate how many bits are valid in the last byte. range=[1,8]. for the last byte of bit-oriented frame
     input  wire       tx_tlast,
-    input  wire [2:0] tx_tlastb,      // indicate how many bits are valid in the last byte. 0:1bit, 1:2bits, 2:3bits, ..., 7:8bits.
     // tx bit modulate interface
     input  wire       tx_req,
     output reg        tx_en,
@@ -32,7 +32,7 @@ reg [ 7:0] buffer [4096];   // will synthesis to BRAM
 reg [ 7:0] rdata = '0;
 reg [11:0] wptr = '0;
 reg [11:0] rptr = '0;
-reg [ 2:0] lastb = '0;
+reg [ 3:0] lastb = '0;
 reg [17:0] txshift = '0;
 reg [ 4:0] txcount = '0;
 reg        end_of = 1'b0;
@@ -64,7 +64,7 @@ always @ (posedge clk)
                 crc <= CRC16(crc, tx_tdata);
                 buffer[wptr] <= tx_tdata;
                 if(wptr != '1) wptr <= wptr + 12'd1;
-                lastb <= tx_tlastb;
+                lastb <= tx_tdatab==4'd0 ? 4'd1 : tx_tdatab>4'd8 ? 4'd8 : tx_tdatab;
                 if(tx_tlast) begin           // end of a frame input
                     if(wptr != '1) begin     // not overflow
                         txshift <= '0;       //
@@ -89,7 +89,7 @@ always @ (posedge clk)
                 txshift <= '0;                //
                 txcount <= 5'd1;              //     send the E bit (end of communication)
                 end_of <= 1'b0;
-                remainb <= incomplete ? lastb + 3'd1 : '0;
+                remainb <= incomplete ? lastb[2:0] : '0;
             end else if(tx_req) begin
                 tx_tready <= 1'b1;
                 {tx_bit, tx_en} <= '0;
@@ -111,10 +111,10 @@ always @ (posedge clk)
                 txcount <= 4'd9;
             end else if(rptr+12'd1 < wptr) begin                                                                       // inner bytes
                 txcount <= 4'd9;
-            end else if(lastb != '1) begin                                                                             // last byte (incomplete)
+            end else if(lastb < 4'd8) begin                                                                            // last byte (incomplete)
                 incomplete <= 1'b1;
                 has_crc <= 1'b0;
-                txcount <= {2'h0,lastb} + 5'd1;
+                txcount <= {1'h0,lastb};
             end else begin                                                                                             // last byte (complete)
                 txcount <= 5'd9;
             end

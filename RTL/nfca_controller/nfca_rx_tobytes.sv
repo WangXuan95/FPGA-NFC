@@ -9,35 +9,34 @@ module nfca_rx_tobytes (
     input  wire       rx_bit_en,     // when rx_bit_en=1 pulses, a received bit is valid on rx_bit
     input  wire       rx_bit,        // exclude S (start of communication) and E (end of communication)
     input  wire       rx_end,        // end of a communication pulse, because of detect E, or detect a bit collision, or detect an error.
-    input  wire       rx_end_err,    // indicate an unknown error, such a PICC (card) do not match ISO14443A, or noise, or PICC's frame is too long. Only valid when rx_end=1
     input  wire       rx_end_col,    // indicate a bit collision, only valid when rx_end=1
+    input  wire       rx_end_err,    // indicate an unknown error, such a PICC (card) do not match ISO14443A, or noise, or PICC's frame is too long. Only valid when rx_end=1
     // RX byte parsed
     output reg        rx_tvalid,
     output reg  [7:0] rx_tdata,
-    output reg        rx_tlast,
-    output reg  [3:0] rx_tlastb,
-    output reg        rx_tlast_err,
-    output reg        rx_tlast_col,
-    output reg        no_card
+    output reg  [3:0] rx_tdatab,
+    output reg        rx_tend,
+    output reg        rx_terr
 );
 
-initial {rx_tvalid, rx_tdata, rx_tlast, rx_tlastb, rx_tlast_err, rx_tlast_col} = '0;
+initial {rx_tvalid, rx_tdata, rx_tend, rx_tdatab, rx_terr} = '0;
 
 reg [3:0] cnt = '0;
 reg [7:0] byte_saved = '0;
-enum logic [1:0] {IDLE, START, PARSE, STOP} status = IDLE;
+enum logic [2:0] {IDLE, START, PARSE, CSTOP, STOP} status = IDLE;
 wire      error_parity = (status==PARSE) & ~(^{rx_bit,byte_saved});
 
 always @ (posedge clk) begin
-    {rx_tvalid, rx_tdata, rx_tlast, rx_tlastb, rx_tlast_err, rx_tlast_col} <= '0;
-    no_card <= '0;
-    if(~rstn) begin
+    {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= '0;
+    if(status == CSTOP) begin
+        {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1,      8'h00, 4'd0, 1'b1, 1'b0};   // end with collision (step2)
+        status <= STOP;
+    end else if(~rstn) begin
         cnt <= {1'b0, remainb};
         byte_saved <= '0;
         status <= IDLE;
-        no_card <= status == START;
-        if(status == PARSE)
-            {rx_tvalid, rx_tdata, rx_tlast, rx_tlastb, rx_tlast_err} <= {1'b1, byte_saved, 1'b1, cnt, 1'b1};
+        if(status == START || status == PARSE)
+            {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr}     <= {1'b1, byte_saved, cnt, 1'b1, 1'b1};
     end else if(status == IDLE) begin
         status <= START;
     end else if(status != STOP) begin
@@ -46,14 +45,19 @@ always @ (posedge clk) begin
                 cnt <= cnt + 4'd1;
                 byte_saved[cnt] <= rx_bit;
             end else begin
-                {rx_tvalid, rx_tdata, rx_tlast, rx_tlastb, rx_tlast_err} <= {1'b1, byte_saved, error_parity, cnt, error_parity};
+                {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1, byte_saved,4'd8, error_parity, error_parity};
                 cnt <= '0;
                 byte_saved <= '0;
                 status <= error_parity ? STOP : PARSE;
             end
         end else if(rx_end) begin
-            {rx_tvalid, rx_tdata, rx_tlast, rx_tlastb, rx_tlast_err, rx_tlast_col} <= {1'b1, byte_saved, 1'b1, cnt, rx_end_err, rx_end_col};
-            status <= STOP;
+            status <= rx_end_col ? CSTOP : STOP;
+            if(rx_end_col)
+                {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1, byte_saved, cnt, 1'b0, 1'b0};   // end with collision
+            else if(rx_end_err | (|cnt) )
+                {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1, byte_saved, cnt, 1'b1, 1'b1};   // end with error
+            else
+                {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1,      8'h00,4'd0, 1'b1, 1'b0};   // end normally
         end
     end
 end

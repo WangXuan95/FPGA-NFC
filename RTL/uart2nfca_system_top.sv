@@ -13,7 +13,7 @@ module uart2nfca_system_top (
     input  wire       uart_rx,
     output wire       uart_tx,
     // for debug external trigger (optional)
-    output wire       rf_rx_rstn
+    output wire       rx_rstn
 );
 
 wire       adc_data_en;
@@ -24,22 +24,20 @@ wire [7:0] uart_rx_byte;
 
 wire       tvalid;
 wire [7:0] tdata;
+wire [3:0] tdatab;
 wire       tlast;
-wire [2:0] tlastb;
 
 wire       tx_tvalid;
 wire       tx_tready;
 wire [7:0] tx_tdata;
+wire [3:0] tx_tdatab;
 wire       tx_tlast;
-wire [2:0] tx_tlastb;
 
 wire       rx_tvalid;
 wire [7:0] rx_tdata;
-wire       rx_tlast;
-wire [3:0] rx_tlastb;
-wire       rx_tlast_err;
-wire       rx_tlast_col;
-wire       no_card;
+wire [3:0] rx_tdatab;
+wire       rx_tend;
+wire       rx_terr;
 
 
 ad7276_read ad7276_read_i (
@@ -54,7 +52,7 @@ ad7276_read ad7276_read_i (
 
 
 uart_rx #(
-    .CLK_DIV          ( 177                             )
+    .CLK_DIV          ( 2120                            )   // 81.36MHz / 8482 / ~ 9600 * 4
 ) uart_rx_i (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
@@ -71,23 +69,23 @@ uart_rx_parser uart_rx_parser_i (
     .uart_rx_byte     ( uart_rx_byte                    ),
     .tvalid           ( tvalid                          ),
     .tdata            ( tdata                           ),
-    .tlast            ( tlast                           ),
-    .tlastb           ( tlastb                          )
+    .tdatab           ( tdatab                          ),
+    .tlast            ( tlast                           )
 );
 
 
 stream_sync_fifo #(
-    .DSIZE            ( 8 + 1 + 3                       ),
+    .DSIZE            ( 8 + 4 + 1                       ),
     .ASIZE            ( 12                              )
 ) uart_rx_fifo_i (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
     .itvalid          ( tvalid                          ),
     .itready          (                                 ),
-    .itdata           ( {tdata   , tlast   , tlastb   } ),
+    .itdata           ( {   tdata,    tdatab,    tlast} ),
     .otvalid          ( tx_tvalid                       ),
     .otready          ( tx_tready                       ),
-    .otdata           ( {tx_tdata, tx_tlast, tx_tlastb} )
+    .otdata           ( {tx_tdata, tx_tdatab, tx_tlast} )
 );
 
 
@@ -97,19 +95,17 @@ nfca_controller nfca_controller_i (
     .tx_tvalid        ( tx_tvalid                       ),
     .tx_tready        ( tx_tready                       ),
     .tx_tdata         ( tx_tdata                        ),
+    .tx_tdatab        ( tx_tdatab                       ),
     .tx_tlast         ( tx_tlast                        ),
-    .tx_tlastb        ( tx_tlastb                       ),
+    .rx_rstn          ( rx_rstn                         ),
     .rx_tvalid        ( rx_tvalid                       ),
     .rx_tdata         ( rx_tdata                        ),
-    .rx_tlast         ( rx_tlast                        ),
-    .rx_tlastb        ( rx_tlastb                       ),
-    .rx_tlast_err     ( rx_tlast_err                    ),
-    .rx_tlast_col     ( rx_tlast_col                    ),
-    .no_card          ( no_card                         ),
+    .rx_tdatab        ( rx_tdatab                       ),
+    .rx_tend          ( rx_tend                         ),
+    .rx_terr          ( rx_terr                         ),
     .adc_data_en      ( adc_data_en                     ),
     .adc_data         ( adc_data                        ),
-    .carrier_out      ( carrier_out                     ),
-    .rx_rstn          ( rf_rx_rstn                      )
+    .carrier_out      ( carrier_out                     )
 );
 
 
@@ -119,22 +115,20 @@ endfunction
 
 
 uart_tx #(
-    .UART_CLK_DIV     ( 707                             ),  // 81.428571MHz / 707 = 115175 ~ 115200
+    .UART_CLK_DIV     ( 8482                            ),  // 81.36MHz / 8482 ~ 9600
     .MODE             ( 1                               ),  // ASCII printable mode
-    .FIFO_ASIZE       ( 11                              ),
-    .BYTE_WIDTH       ( 5                               ),
+    .FIFO_ASIZE       ( 12                              ),
+    .BYTE_WIDTH       ( 4                               ),
     .BIG_ENDIAN       ( 0                               )
 ) uart_tx_i (
     .rst_n            ( rstn                            ),
     .clk              ( clk                             ),
-    .wreq             ( rx_tvalid | no_card             ),
     .wgnt             (                                 ),
-    .wdata            ( no_card ? {"n", "\n", 8'h00, 8'h00, 8'h00} : 
-                        { hex2ascii(rx_tdata[7:4]), 
-                          hex2ascii(rx_tdata[3:0]), 
-                          rx_tlast_err ? "e" : rx_tlast_col ? "c" : ~rx_tlastb[3] ? ":"    : 8'h00, 
-                          (rx_tlast_err|rx_tlast_col|~rx_tlastb[3]) ? hex2ascii(rx_tlastb) : 8'h00, 
-                          rx_tlast ? "\n" : " "} 
+    .wreq             ( rx_tvalid                       ),
+    .wdata            ( rx_tend ? {(rx_terr ? "n" : 8'h00), "\n", 8'h00, 8'h00} : 
+                        { hex2ascii(rx_tdata[7:4]), hex2ascii(rx_tdata[3:0]), 
+                          rx_tdatab<4'd8 ? ":" : " ", 
+                          rx_tdatab<4'd8 ? hex2ascii(rx_tdatab) : 8'h00 }
                                                         ),
     .o_uart_tx        ( uart_tx                         )
 );
