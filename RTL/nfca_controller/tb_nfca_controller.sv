@@ -28,13 +28,13 @@ nfca_controller nfca_controller_i (
 );
 
 
-task automatic tx_frame(input logic [7:0] data_array [], input logic [2:0] datab = 3'd7);
+task automatic tx_frame(input logic [7:0] data_array [], input logic [3:0] datab = 4'd8);
     {tx_tvalid, tx_tdata, tx_tdatab, tx_tlast} <= '0;
     @ (posedge clk);
     foreach(data_array[ii]) begin
         tx_tvalid <= 1'b1;
         tx_tdata  <= data_array[ii];
-        tx_tdatab <= ii+1 == $size(data_array) ? datab : 3'd7;
+        tx_tdatab <= ii+1 == $size(data_array) ? datab : 4'd8;
         tx_tlast  <= ii+1 == $size(data_array);
         @ (posedge clk);
         while(~tx_tready) @ (posedge clk);
@@ -46,9 +46,9 @@ endtask
 initial begin
     tx_frame('{8'h26});
     tx_frame('{8'h12, 8'h34});
-    tx_frame('{8'h12, 8'h34, 8'h12}, 3'd5);
-    tx_frame('{8'h93, 8'h56, 8'h12}, 3'd6);
-    tx_frame('{8'h93, 8'h56, 8'h12, 8'h34}, 3'd0);
+    tx_frame('{8'h12, 8'h34, 8'h12}, 4'd6);
+    tx_frame('{8'h93, 8'h56, 8'h12}, 4'd7);
+    tx_frame('{8'h93, 8'h56, 8'h12, 8'h34}, 4'd1);
     tx_frame('{8'h95, 8'h70, 8'h12, 8'h34});
     tx_frame('{8'h95, 8'h6f, 8'h12, 8'h34});
     @ (posedge clk);
