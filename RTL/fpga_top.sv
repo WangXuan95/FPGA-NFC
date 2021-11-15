@@ -6,12 +6,12 @@ module fpga_top(
     input  wire        clk50m,          // a 50MHz Crystal oscillator
     
     // AD7276 ADC SPI interface
-    output wire        ad7276_csn,      // connect to AD7276's CSN   (RFID_NFC_Breakboard 的 ADC_CSN)
-    output wire        ad7276_sclk,     // connect to AD7276's SCLK  (RFID_NFC_Breakboard 的 ADC_SCK)
-    input  wire        ad7276_sdata,    // connect to AD7276's SDATA (RFID_NFC_Breakboard 的 ADC_DAT)
+    output wire        ad7276_csn,      // connect to AD7276's CSN   (NFC_Breakboard's AD7276_CSN)
+    output wire        ad7276_sclk,     // connect to AD7276's SCLK  (NFC_Breakboard's AD7276_SCLK)
+    input  wire        ad7276_sdata,    // connect to AD7276's SDATA (NFC_Breakboard's AD7276_SDATA)
     
     // NFC carrier generation signal
-    output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate （栅极）  (RFID_NFC_Breakboard 的 CARRIER_OUT)
+    output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate （栅极）  (NFC_Breakboard's CARRIER_OUT)
     
     // connect to Host-PC (typically via a USB-to-UART chip on FPGA board, such as FT232, CP2102 or CH340)
     input  wire        uart_rx,         // connect to USB-to-UART chip's UART-TX

@@ -80,7 +80,7 @@ FPGA NFC (RFID)
 
 你可以用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB，然后按照原理图 NFC_BreakoutBoard_sch.pdf 来焊接。
 
-该 PCB 设计在立创 EDA 开源，详见 https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard 。
+该 PCB 设计在立创 EDA 开源： https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard
 
 在工作时，模块上的 J1 需要连接 5V~9V 的电源。 J2 的 4 个引脚+GND 需要连接到 FPGA 开发板（占用 FPGA 4 个普通 IO 引脚，电平为 3.3V 或 2.5V 均可）。
 
@@ -97,15 +97,19 @@ FPGA NFC (RFID)
     module fpga_top(
         input  wire        rstn_btn,        // press button to reset, pressed=0, unpressed=1
         input  wire        clk50m,          // a 50MHz Crystal oscillator
+        
         // AD7276 ADC SPI interface
-        output wire        ad7276_csn,      // connect to AD7276's CSN   (读卡器模块 的 ADC_CSN)
-        output wire        ad7276_sclk,     // connect to AD7276's SCLK  (读卡器模块 的 ADC_SCK)
-        input  wire        ad7276_sdata,    // connect to AD7276's SDATA (读卡器模块 的 ADC_DAT)
+        output wire        ad7276_csn,      // connect to AD7276's CSN   (NFC_Breakboard's AD7276_CSN)
+        output wire        ad7276_sclk,     // connect to AD7276's SCLK  (NFC_Breakboard's AD7276_SCLK)
+        input  wire        ad7276_sdata,    // connect to AD7276's SDATA (NFC_Breakboard's AD7276_SDATA)
+        
         // NFC carrier generation signal
-        output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate （栅极）  (读卡器模块 的 CARRIER_OUT)
+        output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate (栅极)  (NFC_Breakboard's CARRIER_OUT)
+        
         // connect to Host-PC (typically via a USB-to-UART chip on FPGA board, such as FT232, CP2102 or CH340)
         input  wire        uart_rx,         // connect to USB-to-UART chip's UART-TX
         output wire        uart_tx,         // connect to USB-to-UART chip's UART-RX
+        
         // connect to on-board LED's (optional)
         output wire        led0,            // led0=1 indicates PLL is normally run
         output wire        led1,            // led1=1 indicates carrier is on
@@ -355,7 +359,8 @@ AntiCollision 是 ISO14443 规定的多卡检测和防冲突机制，因为不�
 如果你将卡放在线圈上，并发送串口命令后，串口响应不符合预期，应该：
 
 - 看看串口是否响应字符 'n'，若没有，说明 FPGA 工作不正常。检查串口连接和波特率设置，并看看程序有没有烧到 FPGA 里。
-- 如果无论发什么，都响应字符 'n' ，说明 FPGA 正常工作，但没检测到卡。请检查 NFC_BreakoutBoard 的电源、FPGA 和 NFC_BreakoutBoard 的连接和引脚分配。如果没问题，将卡贴在线圈上保证信号强度。如果还不行，进一步的调试方法是用示波器观察信号，将示波器接在 NFC_BreakoutBoard 的 J3 (SMA 接口上)，这里应该能观察到对载波的包络检波。让串口每隔2秒发送一次 26，在示波器上应该能看到载波启动、发送 0x26 的调制过程。然后观察发送调制后大概 8us 后是否有微弱的信号变化（大概只会有几十 mV的浮动），这就是卡片对读卡器的响应。
+- 如果无论发什么，都响应字符 'n' ，说明 FPGA 正常工作，但没检测到卡。请检查 NFC_BreakoutBoard 的电源、FPGA 和 NFC_BreakoutBoard 的连接和引脚分配。如果没问题，将卡贴在线圈上保证信号强度。
+- 如果还不行，进一步的调试方法是用示波器观察信号，将示波器接在 NFC_BreakoutBoard 的 J3 (SMA 接口上)，这里应该能观察到对载波的包络检波。让串口每隔2秒发送一次 26 (REQA)，在示波器上应该能看到载波启动、调制 0x26 的调制过程。然后观察发送调制后大概 8us 后是否有微弱的信号变化（大概只会有几十 mV的浮动），这就是卡片对读卡器的响应。
 
 
 
