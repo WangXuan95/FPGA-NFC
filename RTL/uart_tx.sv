@@ -17,7 +17,7 @@ module uart_tx #(
     parameter  BIG_ENDIAN   = 0     // 0=little endian, 1=big endian
                                     // when BYTE_WIDTH>=2, this parameter determines the byte order of wdata
 )(
-    input  logic clk, rst_n,
+    input  logic clk, rstn,
     
     input  logic wreq,
     output logic wgnt,
@@ -47,22 +47,22 @@ logic [BYTE_WIDTH*8-1:0] fifo_mem [(1<<FIFO_ASIZE)];
 
 assign wgnt = fifo_full_n & wreq;
 
-always @ (posedge clk or negedge rst_n)
-    if(~rst_n)
+always @ (posedge clk or negedge rstn)
+    if(~rstn)
         fifo_wr_pointer <= '0;
     else begin
         if(wgnt)
             fifo_wr_pointer <= fifo_wr_pointer + (FIFO_ASIZE)'(1);
     end
 
-always @ (posedge clk or negedge rst_n)
-    if(~rst_n)
+always @ (posedge clk or negedge rstn)
+    if(~rstn)
         cyccnt = 0;
     else
         cyccnt = (cyccnt<UART_CLK_DIV-1) ? cyccnt+1 : 0;
 
-always @ (posedge clk or negedge rst_n)
-    if(~rst_n) begin
+always @ (posedge clk or negedge rstn)
+    if(~rstn) begin
         rd_ena          = 1'b0;
         fifo_rd_pointer = 0;
         fifo_rd_data_reg= 0;

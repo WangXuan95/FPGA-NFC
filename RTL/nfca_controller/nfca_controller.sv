@@ -1,4 +1,10 @@
-`timescale 1ns/1ns
+
+//--------------------------------------------------------------------------------------------------------
+// Module  : nfca_controller
+// Type    : synthesizable, IP's top
+// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Function: NFC-A (ISO14443A) controller
+//--------------------------------------------------------------------------------------------------------
 
 module nfca_controller (
     input  wire       rstn,           // 0:reset, 1:work
@@ -9,8 +15,9 @@ module nfca_controller (
     input  wire [7:0] tx_tdata,
     input  wire [3:0] tx_tdatab,      // indicate how many bits are valid in the last byte. range=[1,8]. for the last byte of bit-oriented frame
     input  wire       tx_tlast,
+    // RX status
+    output wire       rx_on,
     // RX byte stream interface for NFC PICC-to-PCD (axis source liked, without tready)
-    output wire       rx_rstn,
     output wire       rx_tvalid,
     output wire [7:0] rx_tdata,
     output wire [3:0] rx_tdatab,
@@ -62,7 +69,7 @@ nfca_tx_modulate nfca_tx_modulate_i (
     .tx_en         ( tx_en             ),
     .tx_bit        ( tx_bit            ),
     .carrier_out   ( carrier_out       ),
-    .rx_rstn       ( rx_rstn           )
+    .rx_on         ( rx_on             )
 );
 
 
@@ -79,8 +86,9 @@ nfca_rx_dsp nfca_rx_dsp_i (
 
 
 nfca_rx_tobits nfca_rx_tobits_i (
-    .rstn          ( rx_rstn           ),
+    .rstn          ( rstn              ),
     .clk           ( clk               ),
+    .rx_on         ( rx_on             ),
     .rx_ask_en     ( rx_ask_en         ),
     .rx_ask        ( rx_ask            ),
     .rx_bit_en     ( rx_bit_en         ),
@@ -92,8 +100,9 @@ nfca_rx_tobits nfca_rx_tobits_i (
 
 
 nfca_rx_tobytes nfca_rx_tobytes_i (
-    .rstn          ( rx_rstn           ),
+    .rstn          ( rstn              ),
     .clk           ( clk               ),
+    .rx_on         ( rx_on             ),
     .remainb       ( remainb           ),
     .rx_bit_en     ( rx_bit_en         ),
     .rx_bit        ( rx_bit            ),

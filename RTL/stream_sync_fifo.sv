@@ -1,4 +1,3 @@
-`timescale 1ns/1ns
 
 module stream_sync_fifo #(
     parameter   DSIZE = 8,
@@ -21,9 +20,9 @@ logic [ASIZE:0] wptr, rptr;
 wire full  = wptr == {~rptr[ASIZE], rptr[ASIZE-1:0]};
 wire empty = wptr == rptr;
 
-assign itready = rstn & ~full;
+assign itready = ~full;
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         wptr <= '0;
     end else begin
@@ -41,7 +40,7 @@ reg [DSIZE-1:0] rddata;
 reg [DSIZE-1:0] keepdata;
 assign otdata = rdack ? rddata : keepdata;
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         otvalid <= 1'b0;
         rdack <= 1'b0;

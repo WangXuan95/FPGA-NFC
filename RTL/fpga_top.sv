@@ -1,4 +1,3 @@
-`timescale 1ns/1ns
 
 module fpga_top(
 
@@ -46,7 +45,7 @@ uart2nfca_system_top uart2nfca_system_i (
     .carrier_out   ( carrier_out       ),
     .uart_rx       ( uart_rx           ),
     .uart_tx       ( uart_tx           ),
-    .rx_rstn       ( led2              )
+    .rx_on         ( led2              )
 );
 
 

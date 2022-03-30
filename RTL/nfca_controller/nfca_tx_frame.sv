@@ -1,4 +1,10 @@
-`timescale 1ns/1ns
+
+//--------------------------------------------------------------------------------------------------------
+// Module  : nfca_tx_frame
+// Type    : synthesizable, IP's sub module
+// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Function: called by nfca_controller
+//--------------------------------------------------------------------------------------------------------
 
 module nfca_tx_frame (
     input  wire       rstn,           // 0:reset, 1:work
@@ -40,12 +46,14 @@ reg        has_crc = 1'b0;
 reg [15:0] crc = 16'h6363;
 reg        incomplete = 1'b0;
 
+wire short_frame = (rdata == 8'h26 || rdata == 8'h52 || rdata == 8'h35 || rdata[7:4] == 4'h4 || rdata[7:3] == 5'h0F);
+
 
 always @ (posedge clk)
     rdata <= buffer[rptr];
 
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         tx_tready <= '0;
         {tx_bit, tx_en} <= '0;
@@ -103,7 +111,6 @@ always @ (posedge clk)
             rptr <= rptr + 12'd1;
             txshift <= {9'd0, ~(^rdata), rdata};
             if         (rptr == 12'h0) begin                                                                           // the 1st byte
-                automatic logic short_frame = (rdata == 8'h26 || rdata == 8'h52 || rdata == 8'h35 || rdata[7:4] == 4'h4 || rdata[7:3] == 5'h0F);
                 has_crc <= ~(rdata == 8'h93 || rdata == 8'h95 || rdata == 8'h97 || short_frame);
                 txcount <= short_frame ? 4'd7 : 4'd9;
             end else if(rptr == 12'h1) begin                                                                           // the 2nd byte

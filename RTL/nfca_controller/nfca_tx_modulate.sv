@@ -1,4 +1,10 @@
-`timescale 1ns/1ns
+
+//--------------------------------------------------------------------------------------------------------
+// Module  : nfca_tx_modulate
+// Type    : synthesizable, IP's sub module
+// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Function: called by nfca_controller
+//--------------------------------------------------------------------------------------------------------
 
 module nfca_tx_modulate (
     input  wire       rstn,       // 0:reset, 1:work
@@ -10,7 +16,7 @@ module nfca_tx_modulate (
     // RFID carrier output, connect to a NMOS transistor to drive the antenna coil
     output reg        carrier_out,
     // 1:in RX window,  0:out of RX window
-    output reg        rx_rstn
+    output reg        rx_on
 );
 
 localparam    CARRIER_SETUP = 2048;
@@ -18,7 +24,7 @@ localparam    CARRIER_HOLD  = 131072;
 
 initial tx_req  = 1'b0;
 initial carrier_out = 1'b0;
-initial rx_rstn = 1'b0;
+initial rx_on = 1'b0;
 
 reg [ 1:0] clkcnt = '0;
 reg [ 7:0] ccnt = '0;
@@ -26,78 +32,85 @@ reg [31:0] wcnt = '1;
 reg [ 1:0] bdata = '0;   // {1 bits for future, 1 bit for current, 1 bit for past}
 
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         clkcnt <= '0;
         ccnt <= '0;
-    end else if(clkcnt >= 2'd2) begin
-        clkcnt <= '0;
-        ccnt <= ccnt + 8'h01;
     end else begin
-        clkcnt <= clkcnt + 2'd1;
+        if(clkcnt >= 2'd2) begin
+            clkcnt <= '0;
+            ccnt <= ccnt + 8'h01;
+        end else begin
+            clkcnt <= clkcnt + 2'd1;
+        end
     end
 
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn)
         tx_req <= 1'b0;
     else
         tx_req <= clkcnt == 2'h0 && ccnt == 8'hff && (wcnt == CARRIER_SETUP || wcnt >= CARRIER_SETUP*2 && wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD || wcnt > CARRIER_SETUP*2 + CARRIER_HOLD + 16);
 
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         wcnt <= '1;
         bdata <= '0;
-    end else if(clkcnt >= 2'd2 && ccnt == 8'hff) begin
-        if         (wcnt <  CARRIER_SETUP) begin
-            wcnt <= wcnt + 1;
-        end else if(wcnt == CARRIER_SETUP) begin
-            if(tx_en) begin
-                bdata <= {tx_bit, bdata[1]};
-                //$write("%d", tx_bit);           // only for simulation
-            end else begin
+    end else begin
+        if(clkcnt >= 2'd2 && ccnt == 8'hff) begin
+            if         (wcnt <  CARRIER_SETUP) begin
                 wcnt <= wcnt + 1;
-                //$write("\n");                   // only for simulation
-            end
-        end else if(wcnt <  CARRIER_SETUP*2) begin
-            wcnt <= wcnt + 1;
-        end else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD) begin
-            if(tx_en) begin
-                wcnt <= CARRIER_SETUP;
+            end else if(wcnt == CARRIER_SETUP) begin
+                if(tx_en) begin
+                    bdata <= {tx_bit, bdata[1]};
+                    //$write("%d", tx_bit);           // only for simulation
+                end else begin
+                    wcnt <= wcnt + 1;
+                    //$write("\n");                   // only for simulation
+                end
+            end else if(wcnt <  CARRIER_SETUP*2) begin
+                wcnt <= wcnt + 1;
+            end else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD) begin
+                if(tx_en) begin
+                    wcnt <= CARRIER_SETUP;
+                    bdata <= {tx_bit, 1'b0};
+                    //$write("%d", tx_bit);           // only for simulation
+                end else
+                    wcnt <= wcnt + 1;
+            end else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD + 16) begin
+                wcnt <= wcnt + 1;
+            end else if(tx_en) begin
+                wcnt <= 0;
                 bdata <= {tx_bit, 1'b0};
-                //$write("%d", tx_bit);           // only for simulation
-            end else
-                wcnt <= wcnt + 1;
-        end else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD + 16) begin
-            wcnt <= wcnt + 1;
-        end else if(tx_en) begin
-            wcnt <= 0;
-            bdata <= {tx_bit, 1'b0};
-            //$write("%d", tx_bit);               // only for simulation
+                //$write("%d", tx_bit);               // only for simulation
+            end
         end
     end
 
 
-always @ (posedge clk)
-    if(~rstn)
+always @ (posedge clk or negedge rstn)
+    if(~rstn) begin
         carrier_out <= 1'b0;
-    else if(wcnt == CARRIER_SETUP && ~ccnt[6])
-        if(ccnt[7])
-            carrier_out <= ~ccnt[0] && bdata[1] == 1'b0;
-        else
-            carrier_out <= ~ccnt[0] && bdata[1:0] != 2'b00;
-    else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD)
-        carrier_out <= ~ccnt[0];
-    else
-        carrier_out <= 1'b0;
+    end else begin
+        if(wcnt == CARRIER_SETUP && ~ccnt[6]) begin
+            if(ccnt[7])
+                carrier_out <= ~ccnt[0] && bdata[1] == 1'b0;
+            else
+                carrier_out <= ~ccnt[0] && bdata[1:0] != 2'b00;
+        end else if(wcnt <= CARRIER_SETUP*2 + CARRIER_HOLD) begin
+            carrier_out <= ~ccnt[0];
+        end else begin
+            carrier_out <= 1'b0;
+        end
+    end
 
 
-always @ (posedge clk)
+always @ (posedge clk or negedge rstn)
     if(~rstn)
-        rx_rstn <= 1'b0;
+        rx_on <= 1'b0;
     else
-        rx_rstn <= wcnt >= CARRIER_SETUP + 7 && wcnt < CARRIER_SETUP*2 - 128;
+        rx_on <= wcnt >= CARRIER_SETUP + 7 && wcnt < CARRIER_SETUP*2 - 128;
 
 endmodule
 

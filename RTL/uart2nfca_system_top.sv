@@ -1,4 +1,3 @@
-`timescale 1ns/1ns
 
 module uart2nfca_system_top (
     input  wire       rstn,           // 0:reset, 1:work
@@ -13,7 +12,7 @@ module uart2nfca_system_top (
     input  wire       uart_rx,
     output wire       uart_tx,
     // for debug external trigger (optional)
-    output wire       rx_rstn
+    output wire       rx_on
 );
 
 wire       adc_data_en;
@@ -97,7 +96,7 @@ nfca_controller nfca_controller_i (
     .tx_tdata         ( tx_tdata                        ),
     .tx_tdatab        ( tx_tdatab                       ),
     .tx_tlast         ( tx_tlast                        ),
-    .rx_rstn          ( rx_rstn                         ),
+    .rx_on            ( rx_on                           ),
     .rx_tvalid        ( rx_tvalid                       ),
     .rx_tdata         ( rx_tdata                        ),
     .rx_tdatab        ( rx_tdatab                       ),
@@ -121,7 +120,7 @@ uart_tx #(
     .BYTE_WIDTH       ( 4                               ),
     .BIG_ENDIAN       ( 0                               )
 ) uart_tx_i (
-    .rst_n            ( rstn                            ),
+    .rstn             ( rstn                            ),
     .clk              ( clk                             ),
     .wgnt             (                                 ),
     .wreq             ( rx_tvalid                       ),

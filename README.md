@@ -1,5 +1,8 @@
+![语言](https://img.shields.io/badge/语言-systemverilog_(IEEE1800_2005)-CAD09D.svg) ![仿真](https://img.shields.io/badge/仿真-iverilog-green.svg) ![部署](https://img.shields.io/badge/部署-quartus-blue.svg) ![部署](https://img.shields.io/badge/部署-vivado-FF1010.svg)
+
 FPGA NFC (RFID)
 ===========================
+
 用 FPGA 从底层开始搭建一个 NFC PCD (读卡器)，支持 ISO14443A 标准。
 
 
@@ -72,27 +75,30 @@ FPGA NFC (RFID)
 
 # 硬件
 
-需要制作一个简单的 PCB（命名为 NFC_BreakoutBoard），上面主要包括：
+PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上面主要包括：
 
-- 发送电路的 N-MOSFET、电感等。
-- 接收电路的检波二极管、AD7276B。
-- 4匝的线圈。
+- 发送电路： N-MOSFET、电感等。
+- 接收电路：检波二极管、AD7276B。
+- 4匝线圈。
 
-你可以用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB，然后按照原理图 NFC_BreakoutBoard_sch.pdf 来焊接。
+| ![](./PCB/NFC_BreakoutBoard_sch.png) |
+| :----------------------------------: |
+|    图： NFC_BreakoutBoard 原理图     |
 
-该 PCB 设计在立创 EDA 开源： https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard
+请用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB ，然后焊接元件。
 
-在工作时，模块上的 J1 需要连接 5V~9V 的电源。 J2 的 4 个引脚+GND 需要连接到 FPGA 开发板（占用 FPGA 4 个普通 IO 引脚，电平为 3.3V 或 2.5V 均可）。
+硬件连接方法：
 
-> 注意：ADC_SCK 的频率高达 40.68MHz，不建议用杜邦线，而是用排针直插到 FPGA 开发板。
+- J1 连接 5V~9V 的电源。
+- J2 连接 FPGA 开发板（占用 FPGA 4 个普通 IO 引脚，电平为 3.3V 或 2.5V 均可）。注意：ADC_SCK 的频率高达 40.68MHz，因此不建议用杜邦线，而是用排针直插到 FPGA 开发板。
 
-该电路方案参考自 THM3060 原理图 [4] 。
+该 PCB 设计在立创 EDA 开源： [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
 
 
 
 # FPGA 部署
 
-部署到 FPGA 时，所有 ./RTL/ 目录 和 ./RTL/nfca_controller/ 目录 中的 .sv 文件都需要加入工程。FPGA 顶层为 fpga_top.sv 。它的每个引脚的连接方式见代码注释，如下：
+部署到 FPGA 时，所有 RTL/ 目录 和 RTL/nfca_controller/ 目录 中的 .sv 文件都需要加入工程。FPGA 顶层为 fpga_top.sv 。它的每个引脚的连接方式见代码注释，如下：
 
     module fpga_top(
         input  wire        rstn_btn,        // press button to reset, pressed=0, unpressed=1
@@ -361,6 +367,25 @@ AntiCollision 是 ISO14443 规定的多卡检测和防冲突机制，因为不�
 - 看看串口是否响应字符 'n'，若没有，说明 FPGA 工作不正常。检查串口连接和波特率设置，并看看程序有没有烧到 FPGA 里。
 - 如果无论发什么，都响应字符 'n' ，说明 FPGA 正常工作，但没检测到卡。请检查 NFC_BreakoutBoard 的电源、FPGA 和 NFC_BreakoutBoard 的连接和引脚分配。如果没问题，将卡贴在线圈上保证信号强度。
 - 如果还不行，进一步的调试方法是用示波器观察信号，将示波器接在 NFC_BreakoutBoard 的 J3 (SMA 接口上)，这里应该能观察到对载波的包络检波。让串口每隔2秒发送一次 26 (REQA)，在示波器上应该能看到载波启动、调制 0x26 的调制过程。然后观察发送调制后大概 8us 后是否有微弱的信号变化（大概只会有几十 mV的浮动），这就是卡片对读卡器的响应。
+
+
+
+# 仿真
+
+仿真所需要的文件在目录 SIM 里，其中：
+
+- tb_nfca_controller.sv 是针对 nfca_controller.sv 的 testbench 。
+- tb_nfca_controller_run_iverilog.bat 包含了 iverilog 仿真命令。
+
+该仿真的行为是：向 nfca_controller 的发送接口发送一些帧，在 carrier_out 信号上可以看到调制的 PCD-to-PICC 发送数据。但该仿真并不会仿真 PICC-to-PCD ，因为我没有编写 PICC 的 model 代码。
+
+使用 iverilog 进行仿真前，需要安装 iverilog ，见：[iverilog_usage](https://github.com/WangXuan95/WangXuan95/blob/main/iverilog_usage/iverilog_usage.md)
+
+然后双击 tb_nfca_controller_run_iverilog.bat 运行仿真，然后可以打开生成的 dump.vcd 文件查看波形。下图是看到的 0x26（REQA）帧的调制波形：
+
+|             ![](./SIM/wave.png)             |
+| :-----------------------------------------: |
+| 图：仿真中看到的 0x26（REQA）帧的调制波形。 |
 
 
 

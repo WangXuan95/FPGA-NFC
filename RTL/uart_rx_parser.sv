@@ -1,4 +1,3 @@
-`timescale 1ns/1ns
 
 module uart_rx_parser #(
     parameter CLK_DIV = 108  // UART baud rate = clk freq/(4*CLK_DIV), modify CLK_DIV to change the UART baud
@@ -57,60 +56,62 @@ assign {ishex, hexvalue} = ascii2hex(uart_rx_byte);
 enum logic [2:0] {INIT, HEXH, HEXL, LASTB, INVALID} fsm = INIT;
 reg [7:0] savedata = '0;
 
-always @ (posedge clk) begin
-    {tvalid, tdata, tlast} <= '0;
-    tdatab <= 4'd8;
+always @ (posedge clk or negedge rstn)
     if(~rstn) begin
+        {tvalid, tdata, tlast, tdatab} <= '0;
         fsm <= INIT;
         savedata <= '0;
-    end else if(uart_rx_byte_en) begin        
-        if         (fsm == INIT) begin
-            if(ishex) begin
-                savedata <= {4'h0, hexvalue};
-                fsm <= HEXH;
-            end else if(~iscrlf & ~isspace) begin
-                fsm <= INVALID;
-            end
-        end else if(fsm == HEXH || fsm==HEXL) begin
-            if(ishex) begin
-                if(fsm == HEXH) begin
-                    savedata <= {savedata[3:0], hexvalue};
-                    fsm <= HEXL;
-                end else begin
-                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b0};
+    end else begin
+        {tvalid, tdata, tlast} <= '0;
+        tdatab <= 4'd8;
+        if(uart_rx_byte_en) begin        
+            if         (fsm == INIT) begin
+                if(ishex) begin
                     savedata <= {4'h0, hexvalue};
                     fsm <= HEXH;
+                end else if(~iscrlf & ~isspace) begin
+                    fsm <= INVALID;
                 end
-            end else if(iscolon) begin
-                fsm <= LASTB;
-            end else if(isspace) begin
-                fsm <= HEXL;
+            end else if(fsm == HEXH || fsm==HEXL) begin
+                if(ishex) begin
+                    if(fsm == HEXH) begin
+                        savedata <= {savedata[3:0], hexvalue};
+                        fsm <= HEXL;
+                    end else begin
+                        {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b0};
+                        savedata <= {4'h0, hexvalue};
+                        fsm <= HEXH;
+                    end
+                end else if(iscolon) begin
+                    fsm <= LASTB;
+                end else if(isspace) begin
+                    fsm <= HEXL;
+                end else if(iscrlf) begin
+                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
+                    fsm <= INIT;
+                end else begin
+                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
+                    fsm <= INVALID;
+                end
+            end else if(fsm == LASTB) begin
+                if(ishex) begin
+                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
+                    if     (hexvalue == 4'd0)
+                        tdatab <= 4'd1;
+                    else if(hexvalue <= 4'd7)
+                        tdatab <= hexvalue;
+                    fsm <= INVALID;
+                end else if(iscrlf) begin
+                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
+                    fsm <= INIT;
+                end else begin
+                    {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
+                    fsm <= INVALID;
+                end
             end else if(iscrlf) begin
-                {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
                 fsm <= INIT;
-            end else begin
-                {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
-                fsm <= INVALID;
             end
-        end else if(fsm == LASTB) begin
-            if(ishex) begin
-                {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
-                if     (hexvalue == 4'd0)
-                    tdatab <= 4'd1;
-                else if(hexvalue <= 4'd7)
-                    tdatab <= hexvalue;
-                fsm <= INVALID;
-            end else if(iscrlf) begin
-                {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
-                fsm <= INIT;
-            end else begin
-                {tvalid, tdata, tlast} <= {1'b1, savedata, 1'b1};
-                fsm <= INVALID;
-            end
-        end else if(iscrlf) begin
-            fsm <= INIT;
         end
     end
-end
 
 endmodule
