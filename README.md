@@ -56,7 +56,7 @@ FPGA NFC (RFID)
     uart_tx |---|->|-------->|  logic  |---|--->|  pack    |--------->| modulate  |--------------->|---------------->|--|-->| N-MOSFET |--->| circuit  |      |         |
             |   |  |         -----------   |    ------------          -------------                |   carrier_out   |  |   |          |    |          |---v->| Antenna |
             |   |  |           uart_rx.sv  | nfca_tx_frame.sv           | nfca_tx_modulate.sv      |                 |  |   ------------    ------------   |  |  Coil   |
-            |   |  |    uart_rx_parser.sv  |                    rx_rstn |                          |                 |  |                                  |  |         |
+            |   |  |    uart_rx_parser.sv  |                      rx_on |                          |                 |  |                                  |  |         |
             |   |  |  stream_sync_fifo.sv  |                            |                          |                 |  |                                  |  -----------
             |   |  |         ___________   |  ___________         ______V____        ____________  |  _____________  |  |     ___________   ____________   |
             |   |  | uart_tx | UART TX |   |  | bytes   |         | bits    |        | ADC data |  |  | AD7276B   |  |  |     | AD7276B |   | Envelop  |   |
@@ -81,9 +81,13 @@ PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上�
 - 接收电路：检波二极管、AD7276B。
 - 4匝线圈。
 
-| ![](./PCB/NFC_BreakoutBoard_sch.png) |
-| :----------------------------------: |
-|    图： NFC_BreakoutBoard 原理图     |
+| ![sch](./PCB/NFC_BreakoutBoard_sch.png) |
+| :-------------------------------------: |
+|      图： NFC_BreakoutBoard 原理图      |
+
+| ![board](./PCB/NFC_BreakoutBoard.jpg) |
+| :-----------------------------------: |
+|        图： NFC_BreakoutBoard         |
 
 请用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB ，然后焊接元件。
 
@@ -122,7 +126,7 @@ PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上�
         output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
     );
 
-所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。除了 fpga_top.sv 里的 altpll 模块是仅限于 Altera Cyclone IV 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换，总之只要生成的是 81.36MHz 的时钟来驱动 NFC 子模块即可。
+所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。除了 fpga_top.sv 里的 altpll 模块是仅限于 Altera Cyclone IV 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换，总之只要生成 81.36MHz 的时钟来驱动 NFC 子模块即可。
 
 
 
@@ -136,7 +140,7 @@ FPGA 烧录之后，Host-PC 可以通过串口控制 FPGA 和 PICC 进行交互�
 
 ## 与 M1 卡通信
 
-我用自己的门禁卡，和几个在 taobao 上买了的 M1 “白卡”试了试，因为都是 M1 卡，行为类似。以一个卡举例：
+我用自己的门禁卡，和几个在 taobao 上买了的 M1 “白卡”试了试，因为都是 M1 卡，行为类似。以其中一个卡举例：
 
 在 “串口调试助手” 中输入如下命令并点击发送，这会发送 0x26（ISO14443 [3] 规定的 REQA）给卡片（注意末尾要加回车，这样才会被当成一条完整的命令）：
 
