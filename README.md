@@ -122,14 +122,13 @@ PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上�
         output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
     );
 
-* 所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。
-* 除了 fpga_top.sv 里的 altpll 模块是仅限于 Cyclone IV E 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV E，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换。
+所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。除了 fpga_top.sv 里的 altpll 模块是仅限于 Altera Cyclone IV 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换，总之只要生成的是 81.36MHz 的时钟来驱动 NFC 子模块即可。
 
 
 
-# 串口控制
+# 串口交互
 
-Host-PC 通过串口控制 FPGA 和 PICC 进行交互。串口格式为 9600,8,n,1 (即波特率=9600，8个数据位，无校验位，1个停止位)。串口通信是“一问一答”的形式，发送你要发给卡片的数据，然后卡片返回数据。每个命令和响应都以 \r 或 \n 或 \r\n 结尾（也就是一行一个命令/响应）
+FPGA 烧录之后，Host-PC 可以通过串口控制 FPGA 和 PICC 进行交互。串口格式为 9600,8,n,1 (即波特率=9600，8个数据位，无校验位，1个停止位)。串口通信是“一问一答”的形式，发送你要发给卡片的数据，然后卡片返回数据。每个命令和响应都以 \r 或 \n 或 \r\n 结尾（也就是一行一个命令/响应）
 
 首先，建议在 PC 上使用“串口调试助手”，而不是 putty 等软件。因为我设计的逻辑是： FPGA 会在收到串口命令时打开载波，如果1.2秒内没有下一个命令到来，就自动关闭载波。这对于一个控制串口的应用程序是足够的时间。但1.2秒是不够人是打出下一条命令的，会导致载波关闭，卡片下电，卡片之前获得的状态都消失了。“串口调试助手”可以一次发送多行命令，而 Putty 则一次只能打一条命令。
 

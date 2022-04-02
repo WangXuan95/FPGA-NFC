@@ -34,21 +34,20 @@ reg [11:0] shift3 = '0;
 reg [ 4:0] cnt = '0;
 enum logic [1:0] {IDLE, PARSE, STOP} status = IDLE;
 
-reg [3:0] sum [4];
-initial for(int ii=0; ii<4; ii++) sum[ii] = '0;
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         detect_zeros <= '0;
         detect_ones <= '0;
         {shift3, shift2, shift1, shift0} <= '0;
-        for(int ii=0; ii<4; ii++) sum[ii] = '0;
     end else begin
         if(~rx_on) begin
             detect_zeros <= '0;
             detect_ones <= '0;
             {shift3, shift2, shift1, shift0} <= '0;
         end else if(rx_ask_en) begin
+            logic [3:0] sum [4];
+            for(int ii=0; ii<4; ii++) sum[ii] = '0;
             for(int ii=0; ii<12; ii++) begin
                 sum[0] += {3'h0, shift0[ii]};
                 sum[1] += {3'h0, shift1[ii]};
