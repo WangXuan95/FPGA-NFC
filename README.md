@@ -73,7 +73,7 @@ FPGA NFC (RFID)
 
 
 
-# 硬件
+# 搭建硬件
 
 PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上面主要包括：
 
@@ -102,7 +102,7 @@ PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上�
 
 # FPGA 部署
 
-部署到 FPGA 时，所有 RTL/ 目录 和 RTL/nfca_controller/ 目录 中的 .sv 文件都需要加入工程。FPGA 顶层为 fpga_top.sv 。它的每个引脚的连接方式见代码注释，如下：
+部署到 FPGA 时，所有 RTL 目录 和 RTL/nfca_controller 目录 中的 .sv 文件都需要加入工程。顶层文件为 fpga_top.sv ，它的每个引脚的连接方式见代码注释，如下：
 
     module fpga_top(
         input  wire        rstn_btn,        // press button to reset, pressed=0, unpressed=1

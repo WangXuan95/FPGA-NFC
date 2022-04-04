@@ -53,6 +53,11 @@ always @ (posedge clk)
     rdata <= buffer[rptr];
 
 
+always @ (posedge clk)
+    if(tx_tready & tx_tvalid)
+        buffer[wptr] <= tx_tdata;
+
+
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         tx_tready <= '0;
@@ -70,7 +75,6 @@ always @ (posedge clk or negedge rstn)
         if(tx_tready) begin
             if(tx_tvalid) begin
                 crc <= CRC16(crc, tx_tdata);
-                buffer[wptr] <= tx_tdata;
                 if(wptr != '1) wptr <= wptr + 12'd1;
                 lastb <= tx_tdatab==4'd0 ? 4'd1 : tx_tdatab>4'd8 ? 4'd8 : tx_tdatab;
                 if(tx_tlast) begin           // end of a frame input
