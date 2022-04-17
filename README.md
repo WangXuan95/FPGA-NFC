@@ -1,5 +1,7 @@
 ![语言](https://img.shields.io/badge/语言-systemverilog_(IEEE1800_2005)-CAD09D.svg) ![仿真](https://img.shields.io/badge/仿真-iverilog-green.svg) ![部署](https://img.shields.io/badge/部署-quartus-blue.svg) ![部署](https://img.shields.io/badge/部署-vivado-FF1010.svg)
 
+中文 | [English](#en)
+
 FPGA NFC (RFID)
 ===========================
 
@@ -398,4 +400,377 @@ AntiCollision 是 ISO14443 规定的多卡检测和防冲突机制，因为不�
 * [2] ISO/NFC Standards and Specifications Overview, https://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/667/2072.ISO_5F00_NFC-Standards-and-Specifications-Overview_5F00_2014.pdf
 * [3] ISO/IEC STANDARD 14443-3, http://emutag.com/iso/14443-3.pdf
 * [4] THM3060 读卡器 原理图（好像没有官方公开，~~国内公司老毛病了~~。可以上 baidu 搜，或 taobao 买个模块，商家就给你原理图了）
+
+
+
+
+
+<span id="en">FPGA NFC (RFID)</span>
+===========================
+
+Use FPGA to build an NFC PCD (card reader) from discrete components to protocol layer, supporting the ISO14443A standard.
+
+
+
+## Why do this project?
+
+I want to play with Radio Freqency (RF), and show something different from others who play SDR. Then I find that the carrier frequency of NFC is only 13.56MHz, and the modulation method is amplitude modulation (ASK), which can realize a card reader with very low cost (the cheapest FPGA + 3Msps ADC + several discrete components). Both digital signal processing and protocol processing are performed in the FPGA, which is a complete small system. So here comes this project, which can fully support ISO14443A under the control of the serial port commands, and has successfully interacted with the M1 card.
+
+
+
+## Concept Definition
+
+| concept                   | short name      | introduction                                                 |
+| ------------------------- | --------------- | ------------------------------------------------------------ |
+| Proximity Coupling Device | PCD, reader     | Provides energy to PICC and acts as a communication host, which is what this project wants to implement using FPGA. |
+| Proximity Card            | PICC, card, tag | These cards such as M1 card, UID card, electronic tag and so on. |
+| PCD-to-PICC               | TX, send        | PCD modulates the carrier to send information to the PICC.   |
+| PICC-to-PCD               | RX, receive     | PICC changes its impedance, so that the PCD can detect changes of carrier amplitude to receive information from PICC. |
+| NXP MIFARE Classic 1K     | M1 card         | A type of card that meets ISO14443A, which is very common in daily life, such as door control cards. |
+| ISO14443A                 | NFCA            | An NFC standard for personal cards. This project fully supports it from hardware to protocol. See [1,2,3] for details. |
+| ISO14443B                 | NFCB            | An NFC standard for personal cards. This project do not support its hardware. |
+| ISO15693                  | NFCV            | An NFC standard for industrial electronic tags. This project supports its hardware, but I haven't write its protocol in FPGA. |
+| Carrier                   | fc              | 13.56MHz, the drive coil of PCD resonates at this frequency. |
+| Subcarrier                | fs              | The smallest unit of modulation, that is, PCD and PICC will change the carrier amplitude at this frequency, 847.5 kHz, which is 1/16 of the carrier frequency. |
+| bit rate                  |                 | 8 subcarrier cycles may carry one bit, so bit rate is 105.9375 kHz |
+| Amplitude Shift Keying    | ASK             | carry information by changing the amplitude of the carrier.  |
+
+
+
+## Poject ideas
+
+The 1st step is carrier generation. I use an FPGA pin to generate a 13.56MHz signal, which drives a resonant circuit by a MOSFET (FDV301N). Corresponding to the source file nfca_tx_modulate.sv
+
+The 2nd step is the implementation of PCD-to-PICC (sub-carrier modulation). The modulation method of ISO14443A's PCD-to-PICC is 100% ASK (that is, in a sub-carrier cycle, either the carrier is sent at full amplitude, or the carrier is not sent at all), which is also very easy for FPGA. Corresponding to the source file nfca_tx_modulate.sv.
+
+The 3rd step is the implementation of PCD-to-PICC-to-PCD. The modulation method of PICC-to-PCD is 2%~10% ASK (that is, in a subcarrier cycle, the carrier is either attenuated a little or not attenuated). I use a diode (1N4148), a capacitor, and a resistor for envelope detection, obtain the frequency of envelope=subcarrier frequency=847.5kHz, and then use an ADC to sample this envelope (corresponding to the source file ad7276_read.sv). Envelope detection reduces the requirement for ADC sampling rate, avoiding directly sample the carrier with an ADC ≥ 20Msps, but only using a 3Msps ADC (AD7276B) to sample the subcarrier. In the FPGA, a digital signal processing (DSP) algorithm is used to detect the ASK signal of the PICC-to-PCD from the ADC sampling data, that is, to detect the small change of the ADC sampling data amplitude, which requires anti-noise capability and adaptive signal amplitude. I use median filtering to subtract the original signal, and then do proportional threshold judgment, the effect is good enough. corresponding to the source file nfca_rx_dsp.sv.
+
+The last step is to implement the codec protocol of ISO14443A, including sending checksum generation and packetization (corresponding to the source file nfca_tx_frame.sv), unpacking the receiving protocol (corresponding to the source files nfca_rx_tobits.sv and nfca_rx_tobytes.sv), this part is in accordance with the Specification [3].
+
+I also implemented the serial port control logic in FPGA, parsed the serial port commands sent by the Host-PC to the FPGA into NFC send data (corresponding to the code files uart_rx.sv and uart_rx_parser.sv), and sent the NFC received data to the Host- PC (corresponding to the code file uart_tx.sv). The user can send data to the card in the "serial assistant" software, and then receive the data returned by the PICC.
+
+The following figure is the system block diagram, in which the Verilog source file names are marked under the modules.
+
+    _________   _________________________________________________________________________________________________________
+            |   |  ___________________________________________________________________________________________________  |
+            |   |  |                       _________________________________________________________                 |  |
+            |   |  |         ___________   |    ____________          _____________                |                 |  |   ____________    ____________
+            |   |  | uart_rx | UART RX |   |    |  frame   |          | RFID TX   |                |                 |  |   | FDV301N  |    | Resonant |      ___________
+    uart_tx |---|->|-------->|  logic  |---|--->|  pack    |--------->| modulate  |--------------->|---------------->|--|-->| N-MOSFET |--->| circuit  |      |         |
+            |   |  |         -----------   |    ------------          -------------                |   carrier_out   |  |   |          |    |          |---v->| Antenna |
+            |   |  |           uart_rx.sv  | nfca_tx_frame.sv           | nfca_tx_modulate.sv      |                 |  |   ------------    ------------   |  |  Coil   |
+            |   |  |    uart_rx_parser.sv  |                      rx_on |                          |                 |  |                                  |  |         |
+            |   |  |  stream_sync_fifo.sv  |                            |                          |                 |  |                                  |  -----------
+            |   |  |         ___________   |  ___________         ______V____        ____________  |  _____________  |  |     ___________   ____________   |
+            |   |  | uart_tx | UART TX |   |  | bytes   |         | bits    |        | ADC data |  |  | AD7276B   |  |  |     | AD7276B |   | Envelop  |   |
+    uart_rx |<--|--|<--------|  logic  |<--|--| rebuild |<--------| rebuild |<-------| DSP      |<-|--|ADC reader |<-|<-|-----|   ADC   |<--| detection|<---
+            |   |  |         -----------   |  -----------         -----------        ------------  |  -------------  |  | SPI |         |   |          |
+            |   |  |          uart_tx.sv   |nfca_rx_tobytes.sv   nfca_rx_tobits.sv  nfca_rx_dsp.sv |  ad7276_read.sv |  |     -----------   ------------
+        GND |---|  |                       --------------------------------------------------------|                 |  |
+            |   |  |                                      nfca_controller.sv                                         |  |
+            |   |  ---------------------------------------------------------------------------------------------------  |
+            |   |                                    uart2nfca_system_top.sv                                            |
+    ---------    --------------------------------------------------------------------------------------------------------
+     Host-PC                                               FPGA (fpga_top.sv)                                                       Analog Circuit
+
+
+
+
+# Build Hardware
+
+In the PCB folder is the hardware design of this repository (named NFC_BreakoutBoard), which mainly includes:
+
+- Sender circuit: N-MOSFET, inductor, etc.
+- Receiver circuit: envelop detection diode, AD7276B.
+- A 4 turns coil.
+
+| ![sch](./figures/NFC_BreakoutBoard_sch.png)  |
+| :------------------------------------------: |
+| **Figure** : Schematic of NFC_BreakoutBoard. |
+
+| ![board](./figures/NFC_BreakoutBoard.jpg) |
+| :---------------------------------------: |
+|      **Figure** : NFC_BreakoutBoard.      |
+
+Please use the manufacturing file [NFC_BreakoutBoard_gerber.zip](./PCB) to proof the PCB and then solder its components.
+
+After soldering, connect it to:
+
+- J1 should be connected to 5V\~9V power supply.
+- J2 should be connected to the FPGA board (occupies 4 common IO pins of the FPGA, and the level should be 3.3V or 2.5V). Note: The frequency of ADC_SCK is up to 40.68MHz, so it is not recommended to use Dupont wires, but to plug it directly into the FPGA development board with pin headers.
+
+This PCB design is available at LCEDA: [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
+
+
+
+# FPGA Deployment
+
+When deploying to an FPGA, all [.sv]() files in the [RTL](./RTL) directory and the [RTL/nfca_controller](./RTL/nfca_controller) directory need to be added to the project. The top-level file is fpga_top.sv , and the constraint method of each pin of it is shown in the code comments, as follows:
+
+    module fpga_top(
+        input  wire        rstn_btn,        // press button to reset, pressed=0, unpressed=1
+        input  wire        clk50m,          // a 50MHz Crystal oscillator
+        
+        // AD7276 ADC SPI interface
+        output wire        ad7276_csn,      // connect to AD7276's CSN   (NFC_Breakboard's AD7276_CSN)
+        output wire        ad7276_sclk,     // connect to AD7276's SCLK  (NFC_Breakboard's AD7276_SCLK)
+        input  wire        ad7276_sdata,    // connect to AD7276's SDATA (NFC_Breakboard's AD7276_SDATA)
+        
+        // NFC carrier generation signal
+        output wire        carrier_out,     // connect to FDV301N(N-MOSFET)'s gate (NFC_Breakboard's CARRIER_OUT)
+        
+        // connect to Host-PC (typically via a USB-to-UART chip on FPGA board, such as FT232, CP2102 or CH340)
+        input  wire        uart_rx,         // connect to USB-to-UART chip's UART-TX
+        output wire        uart_tx,         // connect to USB-to-UART chip's UART-RX
+        
+        // connect to on-board LED's (optional)
+        output wire        led0,            // led0=1 indicates PLL is normally run
+        output wire        led1,            // led1=1 indicates carrier is on
+        output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
+    );
+
+All code is a SystemVerilog behavior-level implementation that supports any FPGA platform. Except that the altpll block in fpga_top.sv is an Altera Cyclone IV-only primitive that generates the 81.36MHz clock to drive the NFC controller. If you are not using Altera Cyclone IV, please use other IP cores (such as Xilinx's clock wizard) or primitives instead, just generate an 81.36MHz clock to drive the NFC submodule.
+
+
+
+# Interaction via serial port
+
+After the FPGA is programmed, the Host-PC can control the FPGA to interact with the PICC through the serial port. The serial port configuration should be `9600,8,n,1` (that is, baud rate=9600, 8 data bits, no parity bit, 1 stop bit). Serial port communication is in the form of "one question and one answer", sending the data you want to send to the card, and then the card returns the data. Each command and response ends with `\r` or `\n` or `\r\n` (i.e. one command/response per line)
+
+First of all, it is recommended to use the "Serial Assistant" software on the PC instead of software such as Putty. Because the logic I designed is: FPGA will turn on the carrier when it receives a serial command, and automatically turn off the carrier if there is no next command within 1.2 seconds. This is enough time for an application that controls the serial port. But 1.2 seconds is not enough for human to type the next command, which will cause the carrier to be turned off, the card to be powered off, and the state obtained before the card will disappear. "Serial Assistant" can send multiple lines of commands at a time, while Putty cannot.
+
+## Communicate with an M1 card
+
+I tried it with my door control card and some M1 "white cards" I bought online, because they are all M1 cards and behave similarly. Take one of the cards as an example:
+
+Enter the following command in the "Serial Assistant" and click send, which will send 0x26 (which is the "REQA" specified by ISO14443 [3]) to the card (note that a carriage return (`\n`) must be added at the end, so that it will be regarded as a complete command):
+
+    26
+
+
+Then the "Serial Assistant" gets receives as following, which is the "ATQA" specified by ISO14443, which means Bit frame anticollision.
+
+    04 00
+
+> **Note**: If the card is not detected, or a waveform that does not meet the standard is received due to noise interference, the serial port will receive the character `n` . Indicates: The FPGA is functioning normally, but no card detected/error has occurred.
+
+Then we add an "AntiCollision" command specified by ISO14443 to the next line in the "send box", this new command is to obtain the UID of the card.
+
+    26
+    93 20
+
+The card response is as follows (the first line is the "ATQA" in response to "REQA", the second line is the UID in response to the "AntiCollision" command):
+
+    04 00
+    4B BE DE 79 52
+
+Then we append a "SELECT" command specified by ISO14443 to the next line in the "send box", it will select the card with the UID we just obtained:
+
+    26
+    93 20
+    93 70 4B BE DE 79 52
+
+The card responds "SAK=0x08" specified by ISO14443 (representing it is an M1 card. The following 0xB6 0xDD is the CRC code):
+
+    04 00
+    4B BE DE 79 52
+    08 B6 DD
+
+> **Note**: The user does not need to add the CRC code when sending, FPGA will automatically calculate and append the CRC where the check code needs to be added as specified in the protocol.
+>
+> **Note**: When receiving, the CRC code will not be checked and deleted by FPGA, and will be displayed on the serial port. 
+
+After knowing that this is the M1 card, we can send Phase1 (the first stage) of the M1 card's Key authentication command to obtain a random number from the card (note that this command is not specified by ISO14443, but is unique to the M1 card, and other cards do not will respond to this command). We append the next line in the "Send Box":
+
+    26
+    93 20
+    93 70 4B BE DE 79 52
+    60 07
+
+The card responds with a 4-byte random number:
+
+    04 00
+    4B BE DE 79 52
+    08 B6 DD
+    EF 9B B6 5A
+
+The subsequent authentication, reading, and writing steps of M1 card are very complicated and are not the scope of this project. This project only focuses on the underlying implementation of the interaction between PCD and PICC. You can use the upper-layer application (C, Python, C# programming) to control the serial port for further operation of the M1 card.
+
+## More test for AntiCollision 
+
+"AntiCollision" is a multi-card detection and anti-collision mechanism specified by ISO14443, because different cards have different UIDs, and the PCD uses UIDs to distinguish different cards.
+
+I put two M1 cards on the coil, and sends REQA and AntiCollision commands, trying to get the UID of the card:
+
+    26
+    93 20 
+
+Serial port receives:
+
+    04 00
+    01:1
+
+The meaning of `01:1` is an incomplete byte 0x01 (00000001), and `:1` means that the collision occurred in the lowest 1st bit of the byte. This shows that the lower 2 bits of the first byte of the UIDs of the two cards are 01 and 11 respectively. The 0th bit is the same, so there is no conflict, and the 1st bit is different, so there is a conflict.
+
+Now if you want to select the card whose lower 2 bits are 11, you need to send a bit-oriented frame specified by ISO14443, the last byte of this frame is incomplete. Send with serial port:
+
+    26
+    93 20
+    93 22 03:2
+
+Note that `93 22 03:2` is a bit-oriented frame. `22` means: The card reader additionally specifies 2 bits in the UID, and the card that is satisfied will respond, and the card that is not satisfied will not respond. The following `03:2` means that only the lower 2 bits of 0x03 (00000011) are sent, which is 11 .
+
+Serial port receives:
+
+    04 00
+    01:1
+    48 BE DE 79 52
+
+The last response is 48 BE DE 79 52. Note that 48 is not a complete byte. It is only valid for the upper 6 bits. It also needs to be spliced with the lower 2 bits (that is, the lower 2 bits of 0x03) to be a complete byte.
+
+A simple splicing method is to bitwise OR the incomplete byte 0x03 sent by the card reader and the incomplete byte 0x48 returned by the card to get 0x4B. Indicate the UID of this card = 4B BE DE 79 52.
+
+Similarly, if you want to select the card whose lower 2 bits are 01, you need to send via serial port:
+
+    26
+    93 20
+    93 22 01:2
+
+Serial port receives:
+
+    04 00
+    01:1
+    00 1D DD 79 B8
+
+Bitwise OR the incomplete byte 0x01 sent by the card reader and the incomplete byte 0x00 returned by the card to get 0x01. Indicates the UID of the other card = 01 1D DD 79 B8.
+
+If the number of cards is more than 3, there may be multiple conflicts according to this process. For each conflict, you must specify the card with the digit = 0 or the card with = 1 that you want to choose.
+
+## Bitwise AntiCollision Example
+
+In order to facilitate everyone to deepen the understanding of the AntiCollision process of ISO14443, here we show an example of bit-by-bit AntiCollision, send the following commands through the serial port, and each command only specifies one more bit.
+
+    26
+    93 20
+    93 21 01:1
+    93 22 01:2
+    93 23 01:3
+    93 24 01:4
+    93 25 01:5
+    93 26 01:6
+    93 27 01:7
+    93 30 01
+    93 31 01 01:1
+    93 32 01 01:2
+    93 33 01 05:3
+    93 34 01 0D:4
+    93 35 01 1D:5
+    93 36 01 1D:6
+    93 37 01 1D:7
+    93 40 01 1D 
+    93 41 01 1D 01:1
+    93 42 01 1D 01:2
+    93 43 01 1D 05:3
+    93 44 01 1D 0D:4
+    93 45 01 1D 1D:5
+    93 46 01 1D 1D:6
+    93 47 01 1D 5D:7
+    93 50 01 1D DD 
+    93 51 01 1D DD 01:1
+    93 52 01 1D DD 01:2
+    93 53 01 1D DD 01:3
+    93 54 01 1D DD 09:4
+    93 55 01 1D DD 19:5
+    93 56 01 1D DD 39:6
+    93 57 01 1D DD 79:7
+    93 60 01 1D DD 79
+    93 61 01 1D DD 79 00:1
+    93 62 01 1D DD 79 00:2
+    93 63 01 1D DD 79 00:3
+    93 64 01 1D DD 79 08:4
+    93 65 01 1D DD 79 18:5
+    93 66 01 1D DD 79 38:6
+    93 67 01 1D DD 79 38:7
+
+Serial port will receive:
+
+    04 00
+    01 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    00 1D DD 79 B8
+    1D DD 79 B8
+    1C DD 79 B8
+    1C DD 79 B8
+    18 DD 79 B8
+    10 DD 79 B8
+    00 DD 79 B8
+    00 DD 79 B8
+    00 DD 79 B8
+    DD 79 B8
+    DC 79 B8
+    DC 79 B8
+    D8 79 B8
+    D0 79 B8
+    C0 79 B8
+    C0 79 B8
+    80 79 B8
+    79 B8
+    78 B8
+    78 B8
+    78 B8
+    70 B8
+    60 B8
+    40 B8
+    00 B8
+    B8
+    B8
+    B8
+    B8
+    B0
+    A0
+    80
+    80
+
+
+
+# Debug
+
+If you put the card on the coil and send serial commands, the serial response is not as expected, you should:
+
+- Check if the serial port responds with the character `n`, if not, the FPGA is not working properly. Check the serial connection and baud rate settings, and see if the program is programed into the FPGA.
+- If it responds with the character `n` no matter what, it means that the FPGA is working properly, but no card is detected. Please check the NFC_BreakoutBoard's power supply, FPGA and NFC_BreakoutBoard's connections and pin assignments. If there's no problem, stick the card to the coil to ensure signal strength.
+- If it still doesn't work, the further debugging method is to observe the signal with an oscilloscope, connect the oscilloscope to the J3 (SMA interface) of the NFC_BreakoutBoard, and the envelope detection of the carrier should be observed here. Let the serial port send 26 (REQA) every 2 seconds, and you should be able to see the modulation process of carrier startup and modulation of 0x26 on the oscilloscope. Then observe whether there is a weak signal change (probably only a few tens of mV) after the modulation is sent, which is the response of the card to the card reader.
+
+
+
+# RTL Simulation
+
+The files of simulation are in the directory [SIM](./SIM), where:
+
+- [tb_nfca_controller.sv](./SIM) is a testbench for nfca_controller.sv.
+- [tb_nfca_controller_run_iverilog.bat](./SIM) is a iverilog simulation command script.
+
+The behavior of the simulation is: send some frames to the nfca_controller's transmit interface, and on the carrier_out signal you can see the modulated PCD-to-PICC modulation waveform. But it cannot simulate PICC-to-PCD because I didn't write the PICC's Verilog model.
+
+Before using iverilog for simulation, you need to install iverilog , see: [iverilog_usage](https://github.com/WangXuan95/WangXuan95/blob/main/iverilog_usage/iverilog_usage.md)
+
+Then double-click tb_nfca_controller_run_iverilog.bat to run the simulation, and then you can open the generated dump.vcd file to view the waveform. The following figure is the modulation waveform of the 0x26 (REQA) frame:
+
+|                 ![wave](./figures/wave.png)                  |
+| :----------------------------------------------------------: |
+| Figure: Modulation waveform for frame 0x26 (REQA) in simulation. |
+
+
+
+# Reference
+
+* [1] ST TN1216 Technical note, ST NFC guide, https://www.st.com/resource/en/technical_note/dm00190233-st25-nfc-guide-stmicroelectronics.pdf
+* [2] ISO/NFC Standards and Specifications Overview, https://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/667/2072.ISO_5F00_NFC-Standards-and-Specifications-Overview_5F00_2014.pdf
+* [3] ISO/IEC STANDARD 14443-3, http://emutag.com/iso/14443-3.pdf
+* [4] THM3060 Card Reader.
 
