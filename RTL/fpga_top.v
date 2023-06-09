@@ -1,5 +1,5 @@
 
-module fpga_top(
+module fpga_top (
 
     input  wire        rstn_btn,        // press button to reset, pressed=0, unpressed=1
     input  wire        clk50m,          // a 50MHz Crystal oscillator
@@ -22,6 +22,7 @@ module fpga_top(
     output wire        led2             // led2=1 indicates PCD-to-PICC communication is done, and PCD is waiting for PICC-to-PCD
 );
 
+
 //-------------------------------------------------------------------------------------------------------------------------------------
 // The NFC controller core needs a 81.36MHz clock, this PLL module is to convert clk50m to clk81m36
 // This PLL module is only available on Altera Cyclone IV E.
@@ -36,7 +37,7 @@ altpll pll_i ( .areset (~rstn_btn), .inclk ({1'b0,clk50m}), .clk ({subwire0,clk8
 //-------------------------------------------------------------------------------------------------------------------------------------
 // UART-to-NFCA system
 //-------------------------------------------------------------------------------------------------------------------------------------
-uart2nfca_system_top uart2nfca_system_i (
+uart2nfca_system_top u_uart2nfca_system (
     .rstn          ( clk_locked        ),
     .clk           ( clk81m36          ),
     .ad7276_csn    ( ad7276_csn        ),

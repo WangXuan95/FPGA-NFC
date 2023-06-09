@@ -11,17 +11,18 @@ module ad7276_read (
     output reg [11:0] adc_data
 );
 
-initial {ad7276_csn, ad7276_sclk} = 2'b11;
-initial {adc_data_en, adc_data} = '0;
 
-reg [ 4:0] cnt = '0;
-reg        data_en = '0;
-reg [11:0] data = '0;
+initial {ad7276_csn, ad7276_sclk} = 2'b11;
+initial {adc_data_en, adc_data} = 0;
+
+reg [ 4:0] cnt = 0;
+reg        data_en = 0;
+reg [11:0] data = 0;
 
 // cnt runs from 0~31 cyclic
 always @ (posedge clk or negedge rstn)
     if(~rstn)
-        cnt <= '0;
+        cnt <= 0;
     else
         cnt <= cnt + 5'd1;
 
@@ -40,9 +41,9 @@ always @ (posedge clk or negedge rstn)
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
         data_en <= 1'b0;
-        data <= '0;
+        data <= 0;
         adc_data_en <= 1'b0;
-        adc_data <= '0;
+        adc_data <= 0;
     end else begin
         if(ad7276_csn) begin                     // submit result
             data_en <= 1'b0;

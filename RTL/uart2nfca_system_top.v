@@ -7,7 +7,7 @@ module uart2nfca_system_top (
     output wire       ad7276_sclk,
     input  wire       ad7276_sdata,
     // RFID carrier output, connect to a NMOS transistor to drive the antenna coil
-    output reg        carrier_out,
+    output wire       carrier_out,
     // UART interface, typically connect to host-PC or MCU, and run NFC user applications on host-PC or MCU.
     input  wire       uart_rx,
     output wire       uart_tx,
@@ -39,7 +39,7 @@ wire       rx_tend;
 wire       rx_terr;
 
 
-ad7276_read ad7276_read_i (
+ad7276_read u_ad7276_read (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
     .ad7276_csn       ( ad7276_csn                      ),
@@ -51,17 +51,22 @@ ad7276_read ad7276_read_i (
 
 
 uart_rx #(
-    .CLK_DIV          ( 2120                            )   // 81.36MHz / 8482 / ~ 9600 * 4
-) uart_rx_i (
+    .CLK_FREQ         ( 81360000                        ),  // 81.36 MHz
+    .BAUD_RATE        ( 9600                            ),
+    .PARITY           ( "NONE"                          ),
+    .FIFO_EA          ( 0                               )
+) u_uart_rx (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
-    .uart_rx          ( uart_rx                         ),
-    .uart_rx_byte_en  ( uart_rx_byte_en                 ),
-    .uart_rx_byte     ( uart_rx_byte                    )
+    .i_uart_rx        ( uart_rx                         ),
+    .o_tready         ( 1'b1                            ),
+    .o_tvalid         ( uart_rx_byte_en                 ),
+    .o_tdata          ( uart_rx_byte                    ),
+    .o_overflow       (                                 )
 );
 
 
-uart_rx_parser uart_rx_parser_i (
+uart_rx_parser u_uart_rx_parser (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
     .uart_rx_byte_en  ( uart_rx_byte_en                 ),
@@ -73,22 +78,22 @@ uart_rx_parser uart_rx_parser_i (
 );
 
 
-stream_sync_fifo #(
-    .DSIZE            ( 8 + 4 + 1                       ),
-    .ASIZE            ( 12                              )
-) uart_rx_fifo_i (
+fifo_sync #(
+    .DW               ( 8 + 4 + 1                       ),
+    .EA               ( 12                              )
+) u_fifo_sync (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
-    .itvalid          ( tvalid                          ),
-    .itready          (                                 ),
-    .itdata           ( {   tdata,    tdatab,    tlast} ),
-    .otvalid          ( tx_tvalid                       ),
-    .otready          ( tx_tready                       ),
-    .otdata           ( {tx_tdata, tx_tdatab, tx_tlast} )
+    .i_rdy            (                                 ),
+    .i_en             ( tvalid                          ),
+    .i_data           ( {   tdata,    tdatab,    tlast} ),
+    .o_rdy            ( tx_tready                       ),
+    .o_en             ( tx_tvalid                       ),
+    .o_data           ( {tx_tdata, tx_tdatab, tx_tlast} )
 );
 
 
-nfca_controller nfca_controller_i (
+nfca_controller u_nfca_controller (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
     .tx_tvalid        ( tx_tvalid                       ),
@@ -108,28 +113,33 @@ nfca_controller nfca_controller_i (
 );
 
 
-function automatic logic [7:0] hex2ascii(input [3:0] hex);
-    return (hex<4'hA) ? (hex+"0") : (hex+("A"-8'hA)) ;
+function  [7:0] hex2ascii;
+    input [3:0] hex;
+begin
+    hex2ascii = (hex<4'hA) ? (hex+"0") : (hex+("A"-8'hA)) ;
+end
 endfunction
 
 
 uart_tx #(
-    .UART_CLK_DIV     ( 8482                            ),  // 81.36MHz / 8482 ~ 9600
-    .MODE             ( 1                               ),  // ASCII printable mode
-    .FIFO_ASIZE       ( 12                              ),
+    .CLK_FREQ         ( 81360000                        ),
+    .BAUD_RATE        ( 9600                            ),
+    .PARITY           ( "NONE"                          ),
+    .STOP_BITS        ( 4                               ),
     .BYTE_WIDTH       ( 4                               ),
-    .BIG_ENDIAN       ( 0                               )
-) uart_tx_i (
+    .FIFO_EA          ( 12                              ),
+    .EXTRA_BYTE_AFTER_TRANSFER ( ""                     ),
+    .EXTRA_BYTE_AFTER_PACKET   ( ""                     )
+) u_uart_tx (
     .rstn             ( rstn                            ),
     .clk              ( clk                             ),
-    .wgnt             (                                 ),
-    .wreq             ( rx_tvalid                       ),
-    .wdata            ( rx_tend ? {(rx_terr ? "n" : 8'h00), "\n", 8'h00, 8'h00} : 
-                        { hex2ascii(rx_tdata[7:4]), hex2ascii(rx_tdata[3:0]), 
-                          rx_tdatab<4'd8 ? ":" : " ", 
-                          rx_tdatab<4'd8 ? hex2ascii(rx_tdatab) : 8'h00 }
-                                                        ),
+    .i_tready         (                                 ),
+    .i_tvalid         ( rx_tvalid                       ),
+    .i_tdata          ( rx_tend ? {8'h00, 8'h00, "\n", (rx_terr ? "n" : 8'h00)} : { ((rx_tdatab<4'd8) ? hex2ascii(rx_tdatab) : 8'h00), ((rx_tdatab<4'd8) ? ":" : " "), hex2ascii(rx_tdata[3:0]), hex2ascii(rx_tdata[7:4]) } ),
+    .i_tkeep          ( rx_tend ? {1'b0 , 1'b0 , 1'b1, (rx_terr ? 1'b1 : 1'b0)} : { ((rx_tdatab<4'd8) ? 1'b1                 : 1'b0 ),  3'b111                                                                            } ),
+    .i_tlast          ( 1'b0                            ),
     .o_uart_tx        ( uart_tx                         )
 );
+
 
 endmodule

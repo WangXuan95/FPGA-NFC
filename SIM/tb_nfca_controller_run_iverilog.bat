@@ -1,5 +1,5 @@
 del sim.out dump.vcd
-iverilog  -g2005-sv  -o sim.out  tb_nfca_controller.sv  ../RTL/nfca_controller/*.sv
+iverilog  -g2001  -o sim.out  tb_nfca_controller.v  ../RTL/nfca_controller/*.v
 vvp -n sim.out
 del sim.out
 pause

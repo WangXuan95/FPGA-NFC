@@ -2,7 +2,7 @@
 //--------------------------------------------------------------------------------------------------------
 // Module  : nfca_rx_tobytes
 // Type    : synthesizable, IP's sub module
-// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Standard: Verilog 2001 (IEEE1364-2001)
 // Function: called by nfca_controller
 //--------------------------------------------------------------------------------------------------------
 
@@ -27,27 +27,34 @@ module nfca_rx_tobytes (
     output reg        rx_terr
 );
 
-initial {rx_tvalid, rx_tdata, rx_tend, rx_tdatab, rx_terr} = '0;
+initial {rx_tvalid, rx_tdata, rx_tend, rx_tdatab, rx_terr} = 0;
 
-reg [3:0] cnt = '0;
-reg [7:0] byte_saved = '0;
-enum logic [2:0] {IDLE, START, PARSE, CSTOP, STOP} status = IDLE;
+reg [3:0] cnt = 0;
+reg [7:0] byte_saved = 0;
+
+localparam [2:0] IDLE   = 3'd0,
+                 START  = 3'd1,
+                 PARSE  = 3'd2,
+                 CSTOP  = 3'd3,
+                 STOP   = 3'd4;
+reg        [2:0] status = IDLE;
+
 wire      error_parity = (status==PARSE) & ~(^{rx_bit,byte_saved});
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= '0;
-        cnt <= '0;
-        byte_saved <= '0;
+        {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= 0;
+        cnt <= 0;
+        byte_saved <= 0;
         status <= IDLE;
     end else begin
-        {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= '0;
+        {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= 0;
         if(status == CSTOP) begin
             {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1,      8'h00, 4'd0, 1'b1, 1'b0};   // end with collision (step2)
             status <= STOP;
         end else if(~rx_on) begin
             cnt <= {1'b0, remainb};
-            byte_saved <= '0;
+            byte_saved <= 0;
             status <= IDLE;
             if(status == START || status == PARSE)
                 {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr}     <= {1'b1, byte_saved, cnt, 1'b1, 1'b1};
@@ -60,8 +67,8 @@ always @ (posedge clk or negedge rstn)
                     byte_saved[cnt] <= rx_bit;
                 end else begin
                     {rx_tvalid, rx_tdata, rx_tdatab, rx_tend, rx_terr} <= {1'b1, byte_saved,4'd8, error_parity, error_parity};
-                    cnt <= '0;
-                    byte_saved <= '0;
+                    cnt <= 0;
+                    byte_saved <= 0;
                     status <= error_parity ? STOP : PARSE;
                 end
             end else if(rx_end) begin

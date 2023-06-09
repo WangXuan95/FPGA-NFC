@@ -2,7 +2,7 @@
 //--------------------------------------------------------------------------------------------------------
 // Module  : nfca_controller
 // Type    : synthesizable, IP's top
-// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Standard: Verilog 2001 (IEEE1364-2001)
 // Function: NFC-A (ISO14443A) controller
 //--------------------------------------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ wire       rx_end_col;    // indicate a bit collision, only valid when rx_end=1
 wire       rx_end_err;    // indicate an unknown error, such a PICC (card) do not match ISO14443A, or noise, only valid when rx_end=1
 
 
-nfca_tx_frame nfca_tx_frame_i (
+nfca_tx_frame u_nfca_tx_frame (
     .rstn          ( rstn              ),
     .clk           ( clk               ),
     .tx_tvalid     ( tx_tvalid         ),
@@ -62,7 +62,7 @@ nfca_tx_frame nfca_tx_frame_i (
 );
 
 
-nfca_tx_modulate nfca_tx_modulate_i (
+nfca_tx_modulate u_nfca_tx_modulate (
     .rstn          ( rstn              ),
     .clk           ( clk               ),
     .tx_req        ( tx_req            ),
@@ -73,7 +73,7 @@ nfca_tx_modulate nfca_tx_modulate_i (
 );
 
 
-nfca_rx_dsp nfca_rx_dsp_i (
+nfca_rx_dsp u_nfca_rx_dsp (
     .rstn          ( rstn              ),
     .clk           ( clk               ),
     .adc_data_en   ( adc_data_en       ),
@@ -85,7 +85,7 @@ nfca_rx_dsp nfca_rx_dsp_i (
 );
 
 
-nfca_rx_tobits nfca_rx_tobits_i (
+nfca_rx_tobits u_nfca_rx_tobits (
     .rstn          ( rstn              ),
     .clk           ( clk               ),
     .rx_on         ( rx_on             ),
@@ -99,7 +99,7 @@ nfca_rx_tobits nfca_rx_tobits_i (
 );
 
 
-nfca_rx_tobytes nfca_rx_tobytes_i (
+nfca_rx_tobytes u_nfca_rx_tobytes (
     .rstn          ( rstn              ),
     .clk           ( clk               ),
     .rx_on         ( rx_on             ),

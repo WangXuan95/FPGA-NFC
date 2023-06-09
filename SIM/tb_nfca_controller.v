@@ -2,7 +2,7 @@
 //--------------------------------------------------------------------------------------------------------
 // Module  : tb_nfca_controller
 // Type    : simulation, top
-// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Standard: Verilog 2001 (IEEE1364-2001)
 // Function: testbench for nfca_controller
 //           only a simulation for PCD-to-PICC,
 //           because there is no PICC model, it can not simulate PICC-to-PCD
@@ -21,9 +21,9 @@ always #6000 clk = ~clk;   // 81.36MHz approx.
 
 reg        tx_tvalid = 1'b0;
 wire       tx_tready;
-reg  [7:0] tx_tdata  = '0;
-reg  [3:0] tx_tdatab = '0;
-reg        tx_tlast  = '0;
+reg  [7:0] tx_tdata  = 0;
+reg  [3:0] tx_tdatab = 0;
+reg        tx_tlast  = 0;
 
 wire       carrier_out;
 
@@ -48,11 +48,16 @@ nfca_controller nfca_controller_i (
 );
 
 
-task automatic tx_frame(input logic [255:0] data_array, input int byte_len, input logic [3:0] datab);
+task tx_frame;
+    input [255:0] data_array;
+    input integer byte_len;
+    input [  3:0] datab;
+    integer ii;
+begin
     $display("PCD-to-PICC: %d Bytes", byte_len);
-    {tx_tvalid, tx_tdata, tx_tdatab, tx_tlast} <= '0;
+    {tx_tvalid, tx_tdata, tx_tdatab, tx_tlast} <= 0;
     @ (posedge clk);
-    for(int ii=0; ii<byte_len; ii++) begin
+    for (ii=0; ii<byte_len; ii=ii+1) begin
         tx_tvalid <= 1'b1;
         tx_tdata  <= data_array[8*ii+:8];
         tx_tdatab <= ii+1 == byte_len ? datab : 4'd8;
@@ -60,7 +65,8 @@ task automatic tx_frame(input logic [255:0] data_array, input int byte_len, inpu
         @ (posedge clk);
         while(~tx_tready) @ (posedge clk);
     end
-    {tx_tvalid, tx_tdata, tx_tdatab, tx_tlast} <= '0;
+    {tx_tvalid, tx_tdata, tx_tdatab, tx_tlast} <= 0;
+end
 endtask
 
 

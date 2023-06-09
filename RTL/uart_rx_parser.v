@@ -15,7 +15,8 @@ module uart_rx_parser #(
     output reg        tlast
 );
 
-initial {tvalid, tdata, tlast, tdatab} = '0;
+
+initial {tvalid, tdata, tlast, tdatab} = 0;
 
 localparam [7:0] CHAR_0  = 8'h30,  // "0"
                  CHAR_9  = 8'h39,  // "9"
@@ -29,40 +30,52 @@ localparam [7:0] CHAR_0  = 8'h30,  // "0"
                  CHAR_lf = 8'h0A,  // "\n"
                  CHAR_cl = 8'h3A;  // ":"
 
-function automatic logic [4:0] ascii2hex(input logic [7:0] ascii);
-    logic [7:0] tmp;
+
+function  [4:0] ascii2hex;
+    input [7:0] ascii;
+    reg   [7:0] tmp;
+begin
     if         ( ascii >= CHAR_0 && ascii <= CHAR_9 ) begin
         tmp = ascii - CHAR_0;
-        return {1'b1, tmp[3:0]};
+        ascii2hex = {1'b1, tmp[3:0]};
     end else if( ascii >= CHAR_A && ascii <= CHAR_F ) begin
         tmp = ascii - CHAR_A + 8'd10;
-        return {1'b1, tmp[3:0]};
+        ascii2hex = {1'b1, tmp[3:0]};
     end else if( ascii >= CHAR_a && ascii <= CHAR_f ) begin
         tmp = ascii - CHAR_a + 8'd10;
-        return {1'b1, tmp[3:0]};
+        ascii2hex = {1'b1, tmp[3:0]};
     end else begin
-        return {1'b0, 4'h0};
+        tmp = ascii;
+        ascii2hex = {1'b0, 4'h0};
     end
+end
 endfunction
 
-wire       isspace = uart_rx_byte == CHAR_sp || uart_rx_byte == CHAR_ht;
-wire       iscrlf  = uart_rx_byte == CHAR_cr || uart_rx_byte == CHAR_lf;
-wire       iscolon = uart_rx_byte == CHAR_cl;
+
+wire       isspace = (uart_rx_byte == CHAR_sp) || (uart_rx_byte == CHAR_ht);
+wire       iscrlf  = (uart_rx_byte == CHAR_cr) || (uart_rx_byte == CHAR_lf);
+wire       iscolon = (uart_rx_byte == CHAR_cl);
 wire       ishex;
 wire [3:0] hexvalue;
+
 assign {ishex, hexvalue} = ascii2hex(uart_rx_byte);
 
+localparam [2:0] INIT   = 3'd0,
+                 HEXH   = 3'd1,
+                 HEXL   = 3'd2,
+                 LASTB  = 3'd3,
+                 INVALID= 3'd4;
+reg [2:0] fsm = INIT;
 
-enum logic [2:0] {INIT, HEXH, HEXL, LASTB, INVALID} fsm = INIT;
-reg [7:0] savedata = '0;
+reg [7:0] savedata = 0;
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        {tvalid, tdata, tlast, tdatab} <= '0;
+        {tvalid, tdata, tlast, tdatab} <= 0;
         fsm <= INIT;
-        savedata <= '0;
+        savedata <= 0;
     end else begin
-        {tvalid, tdata, tlast} <= '0;
+        {tvalid, tdata, tlast} <= 0;
         tdatab <= 4'd8;
         if(uart_rx_byte_en) begin        
             if         (fsm == INIT) begin

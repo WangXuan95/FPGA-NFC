@@ -2,7 +2,7 @@
 //--------------------------------------------------------------------------------------------------------
 // Module  : nfca_tx_modulate
 // Type    : synthesizable, IP's sub module
-// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Standard: Verilog 2001 (IEEE1364-2001)
 // Function: called by nfca_controller
 //--------------------------------------------------------------------------------------------------------
 
@@ -19,6 +19,7 @@ module nfca_tx_modulate (
     output reg        rx_on
 );
 
+
 localparam    CARRIER_SETUP = 2048;
 localparam    CARRIER_HOLD  = 131072;
 
@@ -26,19 +27,19 @@ initial tx_req  = 1'b0;
 initial carrier_out = 1'b0;
 initial rx_on = 1'b0;
 
-reg [ 1:0] clkcnt = '0;
-reg [ 7:0] ccnt = '0;
-reg [31:0] wcnt = '1;
-reg [ 1:0] bdata = '0;   // {1 bits for future, 1 bit for current, 1 bit for past}
+reg [ 1:0] clkcnt = 2'd0;
+reg [ 7:0] ccnt = 8'd0;
+reg [31:0] wcnt = 32'hFFFFFFFF;
+reg [ 1:0] bdata = 2'd0;            // {1 bits for future, 1 bit for current, 1 bit for past}
 
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        clkcnt <= '0;
-        ccnt <= '0;
+        clkcnt <= 2'd0;
+        ccnt <= 8'd0;
     end else begin
         if(clkcnt >= 2'd2) begin
-            clkcnt <= '0;
+            clkcnt <= 2'd0;
             ccnt <= ccnt + 8'h01;
         end else begin
             clkcnt <= clkcnt + 2'd1;
@@ -55,8 +56,8 @@ always @ (posedge clk or negedge rstn)
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        wcnt <= '1;
-        bdata <= '0;
+        wcnt <= 32'hFFFFFFFF;
+        bdata <= 2'd0;
     end else begin
         if(clkcnt >= 2'd2 && ccnt == 8'hff) begin
             if         (wcnt <  CARRIER_SETUP) begin

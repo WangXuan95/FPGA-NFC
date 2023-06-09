@@ -2,7 +2,7 @@
 //--------------------------------------------------------------------------------------------------------
 // Module  : nfca_tx_frame
 // Type    : synthesizable, IP's sub module
-// Standard: SystemVerilog 2005 (IEEE1800-2005)
+// Standard: Verilog 2001 (IEEE1364-2001)
 // Function: called by nfca_controller
 //--------------------------------------------------------------------------------------------------------
 
@@ -23,24 +23,31 @@ module nfca_tx_frame (
     output reg  [2:0] remainb
 );
 
-function automatic logic [15:0] CRC16(input logic [15:0] crc, input logic [7:0] inbyte);
-    logic [7:0] tmp = inbyte ^ crc[7:0];
-    tmp ^= {tmp[3:0], 4'h0};
-    return {8'h0, crc[15:8]} ^ {tmp, 8'h0} ^ {5'h0, tmp, 3'h0} ^ {12'h0, tmp[7:4]} ;
+
+function  [15:0] CRC16;
+    input [15:0] crc;
+    input [ 7:0] inbyte;
+//function automatic logic [15:0] CRC16(input logic [15:0] crc, input logic [7:0] inbyte);
+    reg   [ 7:0] tmp;
+begin
+    tmp = inbyte ^ crc[7:0];
+    tmp = tmp ^ {tmp[3:0], 4'h0};
+    CRC16 = ( {8'h0, crc[15:8]} ^ {tmp, 8'h0} ^ {5'h0, tmp, 3'h0} ^ {12'h0, tmp[7:4]} );
+end
 endfunction
 
 
 initial tx_tready = 1'b0;
-initial {tx_en, tx_bit} = '0;
-initial remainb = '0;
+initial {tx_en, tx_bit} = 0;
+initial remainb = 0;
 
-reg [ 7:0] buffer [4096];   // will synthesis to BRAM
-reg [ 7:0] rdata = '0;
-reg [11:0] wptr = '0;
-reg [11:0] rptr = '0;
-reg [ 3:0] lastb = '0;
-reg [17:0] txshift = '0;
-reg [ 4:0] txcount = '0;
+reg [ 7:0] buffer [0:4095];   // will synthesis to BRAM
+reg [ 7:0] rdata = 0;
+reg [11:0] wptr = 0;
+reg [11:0] rptr = 0;
+reg [ 3:0] lastb = 0;
+reg [17:0] txshift = 0;
+reg [ 4:0] txcount = 0;
 reg        end_of = 1'b0;
 reg        has_crc = 1'b0;
 reg [15:0] crc = 16'h6363;
@@ -60,35 +67,35 @@ always @ (posedge clk)
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
-        tx_tready <= '0;
-        {tx_bit, tx_en} <= '0;
-        {wptr, rptr} <= '0;
-        lastb <= '0;
-        txshift <= '0;
-        txcount <= '0;
+        tx_tready <= 0;
+        {tx_bit, tx_en} <= 0;
+        {wptr, rptr} <= 0;
+        lastb <= 0;
+        txshift <= 0;
+        txcount <= 0;
         end_of <= 1'b0;
         has_crc <= 1'b0;
         crc <= 16'h6363;
         incomplete <= 1'b0;
-        remainb <= '0;
+        remainb <= 0;
     end else begin
         if(tx_tready) begin
             if(tx_tvalid) begin
                 crc <= CRC16(crc, tx_tdata);
-                if(wptr != '1) wptr <= wptr + 12'd1;
+                if (wptr != 12'hFFF) wptr <= wptr + 12'd1;
                 lastb <= tx_tdatab==4'd0 ? 4'd1 : tx_tdatab>4'd8 ? 4'd8 : tx_tdatab;
-                if(tx_tlast) begin           // end of a frame input
-                    if(wptr != '1) begin     // not overflow
-                        txshift <= '0;       //
-                        txcount <= 5'd1;     //     send the S bit (start of communication)
-                        tx_tready <= 1'b0;   //     start to send a frame
-                    end else begin           // overflow!
-                        wptr <= '0;          //     reset wptr
-                        crc <= 16'h6363;     //     reset CRC
+                if(tx_tlast) begin                   // end of a frame input
+                    if (wptr != 12'hFFF) begin       // not overflow
+                        txshift <= 0;                //
+                        txcount <= 5'd1;             //     send the S bit (start of communication)
+                        tx_tready <= 1'b0;           //     start to send a frame
+                    end else begin                   // overflow!
+                        wptr <= 0;                   //     reset wptr
+                        crc <= 16'h6363;             //     reset CRC
                     end
                 end
             end
-        end else if(txcount != '0) begin
+        end else if(txcount != 0) begin
             if(tx_req) begin
                 {txshift, tx_bit, tx_en} <= {1'b0, txshift, 1'b1};
                 txcount <= txcount - 5'd1;
@@ -98,14 +105,14 @@ always @ (posedge clk or negedge rstn)
                 txshift <= {~(^crc[15:8]), crc[15:8], ~(^crc[7:0]), crc[7:0]};     // append CRC (16bit + 2bit parity) 
                 txcount <= 5'd18;
             end else if(end_of) begin
-                txshift <= '0;                //
+                txshift <= 0;
                 txcount <= 5'd1;              //     send the E bit (end of communication)
                 end_of <= 1'b0;
-                remainb <= incomplete ? lastb[2:0] : '0;
+                remainb <= incomplete ? lastb[2:0] : 3'd0;
             end else if(tx_req) begin
                 tx_tready <= 1'b1;
-                {tx_bit, tx_en} <= '0;
-                {wptr, rptr} <= '0;
+                {tx_bit, tx_en} <= 0;
+                {wptr, rptr} <= 0;
             end
             has_crc <= 1'b0;
             crc <= 16'h6363;
