@@ -131,7 +131,7 @@ module fpga_top(
 );
 ```
 
-All code is a SystemVerilog behavior-level implementation that supports any FPGA platform. Except that the altpll block in fpga_top.v is an Altera Cyclone IV-only primitive that generates the 81.36MHz clock to drive the NFC controller. If you are not using Altera Cyclone IV, please use other IP cores (such as Xilinx's clock wizard) or primitives instead, just generate an 81.36MHz clock to drive the NFC submodule.
+All code is a Verilog behavior-level implementation that supports any FPGA platform. Except that the altpll block in fpga_top.v is an Altera Cyclone IV-only primitive that generates the 81.36MHz clock to drive the NFC controller. If you are not using Altera Cyclone IV, please use other IP cores (such as Xilinx's clock wizard) or primitives instead, just generate an 81.36MHz clock to drive the NFC submodule.
 
 　
 
@@ -547,7 +547,7 @@ module fpga_top(
 );
 ```
 
-所有代码都是 SystemVerilog 行为级实现，支持任意 FPGA 平台。除了 fpga_top.v 里的 altpll 模块是仅限于 Altera Cyclone IV 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换，总之只要生成 81.36MHz 的时钟来驱动 NFC 子模块即可。
+所有代码都是 Verilog 行为级实现，支持任意 FPGA 平台。除了 fpga_top.v 里的 altpll 模块是仅限于 Altera Cyclone IV 的原语，它用来生成 81.36MHz 时钟，驱动 NFC 控制器。如果你用的不是 Altera Cyclone IV，请使用其它的 IP 核（例如Xilinx 的 clock wizard）或原语来替换，总之只要生成 81.36MHz 的时钟来驱动 NFC 子模块即可。
 
 　
 
