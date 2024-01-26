@@ -1,6 +1,6 @@
 ![语言](https://img.shields.io/badge/语言-verilog_(IEEE1364_2001)-9A90FD.svg) ![仿真](https://img.shields.io/badge/仿真-iverilog-green.svg) ![部署](https://img.shields.io/badge/部署-quartus-blue.svg) ![部署](https://img.shields.io/badge/部署-vivado-FF1010.svg)
 
-中文 | [English](#en)
+[English](#en) | [中文](#cn)
 
 　
 
@@ -9,9 +9,11 @@
 
 Use FPGA to build an NFC PCD (card reader) from discrete components to protocol layer, supporting the ISO14443A standard.
 
+![FPGA_NFC](./figures/FPGA_NFC.png)
+
 　
 
-## Why do this project?
+## Why?
 
 I want to play with Radio Freqency (RF), and show something different from others who play SDR. Then I find that the carrier frequency of NFC is only 13.56MHz, and the modulation method is amplitude modulation (ASK), which can realize a card reader with very low cost (the cheapest FPGA + 3Msps ADC + several discrete components). Both digital signal processing and protocol processing are performed in the FPGA, which is a complete small system. So here comes this project, which can fully support ISO14443A under the control of the serial port commands, and has successfully interacted with the M1 card.
 
@@ -78,11 +80,20 @@ uart_rx |<--|--|<--------|  logic  |<--|--| rebuild |<--------| rebuild |<------
 
 # Build Hardware
 
+This PCB design is available at LCEDA: [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
+
 In the PCB folder is the hardware design of this repository (named NFC_BreakoutBoard), which mainly includes:
 
 - Sender circuit: N-MOSFET, inductor, etc.
 - Receiver circuit: envelop detection diode, AD7276B.
 - A 4 turns coil.
+
+Please use the manufacturing file [NFC_BreakoutBoard_gerber.zip](./PCB) to proof the PCB and then solder its components.
+
+After soldering, connect the PCB to FPGA:
+
+- J1 should be connected to 7V\~9V power supply.
+- J2 should be connected to the FPGA board (occupies 4 common IO pins of the FPGA, and the level should be 3.3V or 2.5V). Note: The frequency of ADC_SCK is up to 40.68MHz, so it is not recommended to use Dupont wires, but to plug it directly into the FPGA development board with pin headers.
 
 | ![sch](./figures/NFC_BreakoutBoard_sch.png)  |
 | :------------------------------------------: |
@@ -91,15 +102,6 @@ In the PCB folder is the hardware design of this repository (named NFC_BreakoutB
 | ![board](./figures/NFC_BreakoutBoard.jpg) |
 | :---------------------------------------: |
 |      **Figure** : NFC_BreakoutBoard.      |
-
-Please use the manufacturing file [NFC_BreakoutBoard_gerber.zip](./PCB) to proof the PCB and then solder its components.
-
-After soldering, connect it to:
-
-- J1 should be connected to 7V\~9V power supply.
-- J2 should be connected to the FPGA board (occupies 4 common IO pins of the FPGA, and the level should be 3.3V or 2.5V). Note: The frequency of ADC_SCK is up to 40.68MHz, so it is not recommended to use Dupont wires, but to plug it directly into the FPGA development board with pin headers.
-
-This PCB design is available at LCEDA: [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
 
 　
 
@@ -423,6 +425,8 @@ Then double-click tb_nfca_controller_run_iverilog.bat to run the simulation, and
 
 用 FPGA 从底层开始搭建一个 NFC PCD (读卡器)，支持 ISO14443A 标准。
 
+![FPGA_NFC](./figures/FPGA_NFC.png)
+
 　
 
 ## 为什么要做本项目？
@@ -494,11 +498,18 @@ uart_rx |<--|--|<--------|  logic  |<--|--| rebuild |<--------| rebuild |<------
 
 # 搭建硬件
 
-PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上面主要包括：
+该 PCB 设计在立创 EDA 开源： [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
 
-- 发送电路： N-MOSFET、电感等。
-- 接收电路：检波二极管、AD7276B。
+PCB 文件夹里是硬件设计（命名为 NFC_BreakoutBoard），上面主要包括：
+
+- 发送电路 (驱动电路)： N-MOSFET、电感等。
+- 接收电路 (检波电路)：检波二极管、AD7276B。
 - 4匝线圈。
+
+请用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB 。然后焊接元件。最后把该PCB与FPGA连接，连接方法为：
+
+- J1 连接 7V~9V 的电源。
+- J2 连接 FPGA 开发板（占用 FPGA 4 个普通 IO 引脚，电平为 3.3V 或 2.5V 均可）。注意：ADC_SCK 的频率高达 40.68MHz，因此不建议用杜邦线，而是用排针直插到 FPGA 开发板。
 
 | ![sch](./figures/NFC_BreakoutBoard_sch.png) |
 | :-----------------------------------------: |
@@ -507,15 +518,6 @@ PCB 文件夹里是本库的硬件设计（命名为 NFC_BreakoutBoard），上�
 | ![board](./figures/NFC_BreakoutBoard.jpg) |
 | :---------------------------------------: |
 |          图： NFC_BreakoutBoard           |
-
-请用制造文件 NFC_BreakoutBoard_gerber.zip 来打样 PCB ，然后焊接元件。
-
-硬件连接方法：
-
-- J1 连接 7V~9V 的电源。
-- J2 连接 FPGA 开发板（占用 FPGA 4 个普通 IO 引脚，电平为 3.3V 或 2.5V 均可）。注意：ADC_SCK 的频率高达 40.68MHz，因此不建议用杜邦线，而是用排针直插到 FPGA 开发板。
-
-该 PCB 设计在立创 EDA 开源： [oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard](https://oshwhub.com/wangxuan/rfid_nfc_iso14443a_iso15693_breakoutboard)
 
 　
 
